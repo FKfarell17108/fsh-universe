@@ -235,7 +235,7 @@ neofetch off    # disable
 
 ---
 
-## Author
+## © 2026 Farell Kurniawan
 
-**Farell Kurniawan**
-[github.com/FKfarell17108](https://github.com/FKfarell17108)
+Copyright © 2026 Farell Kurniawan. All rights reserved.  
+Distribution and use of this code is permitted under the terms of the **MIT** license.
