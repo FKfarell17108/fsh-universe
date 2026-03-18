@@ -86,8 +86,8 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
 
   const buckets = groupByTime(entries);
   const COLS = process.stdout.columns || 80;
-  const TERM_ROWS = (process.stdout.rows || 24) - 4; 
-  const VISIBLE = Math.min(TERM_ROWS, 20); 
+  const TERM_ROWS = (process.stdout.rows || 24) - 4;
+  const VISIBLE = Math.min(TERM_ROWS, 20);
 
   function buildRows(): Row[] {
     const r: Row[] = [];
@@ -101,7 +101,7 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
 
   let rows = buildRows();
   let cursor = 0;
-  let scrollTop = 0; 
+  let scrollTop = 0;
   let lastRenderedLines = 0;
 
   function adjustScroll() {
@@ -118,7 +118,7 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
     return " " + k("↑↓") + chalk.gray(" navigate  ") +
       k("d") + chalk.gray(isOnHeader ? " delete group  " : " delete entry  ") +
       k("D") + chalk.gray(" delete all  ") +
-      k("q") + chalk.gray("/") + k("esc") + chalk.gray(" quit") +
+      k("esc") + chalk.gray(" quit") +
       scrollInfo + "\x1b[K";
   }
 
@@ -218,8 +218,9 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
       if (cursor < rows.length - 1) { cursor++; adjustScroll(); render(); }
       return;
     }
+    if (raw === "\u001b") return exit();
     if (raw.startsWith("\u001b")) return;
-    if (raw === "\u0003" || raw === "q") return exit();
+    if (raw === "\u0003") return exit();
     if (raw === "D") {
       const msg = `\n  ${chalk.red.bold("Delete all history?")} ${chalk.gray("This cannot be undone.")}\n` +
                   `  ${chalk.bgRed.white.bold(" y ")} ${chalk.gray("yes    ")}${chalk.bgGray.white.bold(" n ")} ${chalk.gray("no / esc")}\n`;
