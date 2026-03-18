@@ -2,8 +2,6 @@
 
 > A custom Unix shell built from scratch using TypeScript, designed to offer a unique terminal experience.
 
-![fsh](terminal.png)
-
 ---
 
 ## What is fsh?
