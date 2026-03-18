@@ -38,7 +38,9 @@ export function saveHistoryEntries(entries: HistoryEntry[]) {
   } catch {}
 }
 
-export function entriesToStrings(e: HistoryEntry[]): string[] { return e.map((x) => x.cmd); }
+export function entriesToStrings(entries: HistoryEntry[]): string[] {
+  return entries.map((e) => e.cmd);
+}
 
 export function pushEntry(entries: HistoryEntry[], cmd: string): HistoryEntry[] {
   return [{ cmd, ts: Date.now() }, ...entries.filter((e) => e.cmd !== cmd)].slice(0, HISTORY_SIZE);
@@ -52,7 +54,6 @@ function groupByTime(entries: HistoryEntry[]): Bucket[] {
   const today = d.getTime();
   const yesterday = today - 86400000;
   const week = today - 7 * 86400000;
-
   const b: Bucket[] = [
     { label: "Last hour", entries: [] },
     { label: "Today",     entries: [] },
@@ -60,14 +61,13 @@ function groupByTime(entries: HistoryEntry[]): Bucket[] {
     { label: "This week", entries: [] },
     { label: "Older",     entries: [] },
   ];
-
   for (const e of entries) {
     const age = now - e.ts;
-    if      (e.ts === 0 || e.ts < week)      b[4].entries.push(e);
-    else if (e.ts < yesterday)               b[3].entries.push(e);
-    else if (e.ts < today)                   b[2].entries.push(e);
-    else if (age < 3_600_000)                b[0].entries.push(e);
-    else                                     b[1].entries.push(e);
+    if      (e.ts === 0 || e.ts < week) b[4].entries.push(e);
+    else if (e.ts < yesterday)          b[3].entries.push(e);
+    else if (e.ts < today)              b[2].entries.push(e);
+    else if (age < 3_600_000)           b[0].entries.push(e);
+    else                                b[1].entries.push(e);
   }
   return b.filter((x) => x.entries.length > 0);
 }
@@ -86,6 +86,8 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
 
   const buckets = groupByTime(entries);
   const COLS = process.stdout.columns || 80;
+  const TERM_ROWS = (process.stdout.rows || 24) - 4; 
+  const VISIBLE = Math.min(TERM_ROWS, 20); 
 
   function buildRows(): Row[] {
     const r: Row[] = [];
@@ -99,30 +101,40 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
 
   let rows = buildRows();
   let cursor = 0;
-  let listLines = 0; // only track the list area, NOT the hint bar
+  let scrollTop = 0; 
+  let lastRenderedLines = 0;
 
-  const k = (s: string) => chalk.bgGray.white.bold(` ${s} `);
+  function adjustScroll() {
+    if (cursor < scrollTop) scrollTop = cursor;
+    if (cursor >= scrollTop + VISIBLE) scrollTop = cursor - VISIBLE + 1;
+  }
 
-  function renderHint(isOnHeader: boolean) {
+  function renderHint(): string {
+    const k = (s: string) => chalk.bgGray.white.bold(` ${s} `);
+    const isOnHeader = rows[cursor]?.kind === "header";
+    const scrollInfo = rows.length > VISIBLE
+      ? chalk.dim(` [${cursor + 1}/${rows.length}]`)
+      : "";
     return " " + k("↑↓") + chalk.gray(" navigate  ") +
       k("d") + chalk.gray(isOnHeader ? " delete group  " : " delete entry  ") +
       k("D") + chalk.gray(" delete all  ") +
-      k("q") + chalk.gray("/") + k("esc") + chalk.gray(" quit") + "\x1b[K";
+      k("q") + chalk.gray("/") + k("esc") + chalk.gray(" quit") +
+      scrollInfo + "\x1b[K";
   }
 
-  function renderList() {
+  function render() {
     let frame = "";
 
-    // Only move up by listLines (the list area), never touching hint bar
-    if (listLines > 0) {
-      frame += `\x1b[${listLines}A\r\x1b[J`;
+    if (lastRenderedLines > 0) {
+      frame += `\x1b[${lastRenderedLines}A\r\x1b[J`;
     }
 
-    // Update hint in place (move up 1 more to reach hint, rewrite, come back)
-    frame += `\x1b[1A\r${renderHint(rows[cursor]?.kind === "header")}\n`;
+    frame += renderHint() + "\n\x1b[K\n";
 
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+    const visible = rows.slice(scrollTop, scrollTop + VISIBLE);
+
+    for (const row of visible) {
+      const i = rows.indexOf(row);
       const active = i === cursor;
 
       if (row.kind === "header") {
@@ -145,22 +157,26 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
       }
     }
 
-    listLines = rows.length;
+    if (rows.length > VISIBLE) {
+      const pct = Math.round(((scrollTop + VISIBLE) / rows.length) * 100);
+      const more = rows.length - (scrollTop + VISIBLE);
+      const indicator = more > 0
+        ? chalk.dim(`  ↓ ${more} more`)
+        : chalk.dim("  (end)");
+      frame += indicator + "\x1b[K\n";
+      lastRenderedLines = 2 + visible.length + 1;
+    } else {
+      lastRenderedLines = 2 + visible.length;
+    }
+
     process.stdout.write(frame);
   }
 
-  function initialRender() {
-    // Write hint bar once, then list below it
-    process.stdout.write("\n" + renderHint(rows[cursor]?.kind === "header") + "\n");
-    listLines = 0;
-    renderList();
-  }
-
-  function clearAll() {
-    // Clear list + hint bar + the leading newline
-    if (listLines > 0) process.stdout.write(`\x1b[${listLines}A\r\x1b[J`);
-    // Also clear hint line and the \n before it
-    process.stdout.write(`\x1b[1A\r\x1b[J\x1b[1A\r\x1b[J`);
+  function clearUI() {
+    if (lastRenderedLines > 0) {
+      process.stdout.write(`\x1b[${lastRenderedLines}A\r\x1b[J`);
+      lastRenderedLines = 0;
+    }
   }
 
   function cleanup() {
@@ -170,7 +186,7 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
   }
 
   function exit() {
-    clearAll();
+    clearUI();
     cleanup();
     const remaining = buckets.flatMap((b) => b.entries);
     setTimeout(() => onDone(remaining), 20);
@@ -189,16 +205,40 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
     rows = buildRows();
     if (rows.length === 0) return exit();
     cursor = Math.min(cursor, rows.length - 1);
-    renderList();
+    adjustScroll();
+    render();
   }
 
   function onKey(raw: string) {
-    if (raw === "\u001b[A") { if (cursor > 0) { cursor--; renderList(); } return; }
-    if (raw === "\u001b[B") { if (cursor < rows.length - 1) { cursor++; renderList(); } return; }
-    if (raw === "\u001b" || raw === "\u0003") return exit();
-    if (raw.startsWith("\u001b")) return; // ignore other sequences
-    if (raw === "q") return exit();
-    if (raw === "D") { buckets.forEach((b) => { b.entries = []; }); return exit(); }
+    if (raw === "\u001b[A") {
+      if (cursor > 0) { cursor--; adjustScroll(); render(); }
+      return;
+    }
+    if (raw === "\u001b[B") {
+      if (cursor < rows.length - 1) { cursor++; adjustScroll(); render(); }
+      return;
+    }
+    if (raw.startsWith("\u001b")) return;
+    if (raw === "\u0003" || raw === "q") return exit();
+    if (raw === "D") {
+      const msg = `\n  ${chalk.red.bold("Delete all history?")} ${chalk.gray("This cannot be undone.")}\n` +
+                  `  ${chalk.bgRed.white.bold(" y ")} ${chalk.gray("yes    ")}${chalk.bgGray.white.bold(" n ")} ${chalk.gray("no / esc")}\n`;
+      process.stdout.write(msg);
+      stdin.removeListener("data", onKey);
+      stdin.on("data", function onConfirm(k: string) {
+        process.stdout.write(`\x1b[3A\r\x1b[J`);
+        if (k === "y" || k === "Y") {
+          stdin.removeListener("data", onConfirm);
+          buckets.forEach((b) => { b.entries = []; });
+          return exit();
+        }
+        if (k === "n" || k === "N" || k === "\u001b" || k === "\u0003") {
+          stdin.removeListener("data", onConfirm);
+          stdin.on("data", onKey);
+        }
+      });
+      return;
+    }
     if (raw === "d" || raw === "\x7f") return deleteAtCursor();
   }
 
@@ -208,5 +248,6 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (u: HistoryE
   process.stdout.write("\x1b[?25l");
   stdin.on("data", onKey);
 
-  initialRender();
+  lastRenderedLines = 0;
+  render();
 }

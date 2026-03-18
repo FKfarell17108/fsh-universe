@@ -8,7 +8,6 @@ const BUILTINS = new Set([
   "clear", "history",
 ]);
 
-// Eager-load PATH executables once at startup, refresh every 30s
 let execCache = new Set<string>();
 let execCacheTime = 0;
 const CACHE_TTL = 30_000;
@@ -26,12 +25,10 @@ function refreshExecutables(): void {
   execCacheTime = Date.now();
 }
 
-// Preload immediately at module load
 refreshExecutables();
 
 function getExecutables(): Set<string> {
   if (Date.now() - execCacheTime > CACHE_TTL) {
-    // Refresh in background — don't block
     setImmediate(refreshExecutables);
   }
   return execCache;
@@ -47,38 +44,34 @@ function commandExists(cmd: string): boolean {
   return getExecutables().has(cmd);
 }
 
-// ─── Tokenizer for highlighting ───────────────────────────────────────────────
-
 type TokenType =
-  | "command"       // first word in a pipeline segment
-  | "arg"           // regular argument
-  | "flag"          // -x or --xxx
-  | "operator"      // | && || ; &
-  | "redirect"      // > >> <
-  | "string_d"      // "..."
-  | "string_s"      // '...'
-  | "variable"      // $VAR
-  | "path"          // contains /
-  | "incomplete_s"  // unclosed string
+  | "command"       
+  | "arg"           
+  | "flag"          
+  | "operator"     
+  | "redirect"    
+  | "string_d"     
+  | "string_s"    
+  | "variable"     
+  | "path"     
+  | "incomplete_s"
 
 type Token = { type: TokenType; value: string };
 
 function tokenizeForHighlight(input: string): Token[] {
   const tokens: Token[] = [];
   let i = 0;
-  let expectCmd = true; // next word is a command
+  let expectCmd = true;
 
   while (i < input.length) {
     const ch = input[i];
 
-    // Whitespace
     if (ch === " " || ch === "\t") {
       tokens.push({ type: "arg", value: ch });
       i++;
       continue;
     }
 
-    // Operators: &&, ||, |, ;, &
     if (ch === "&" && input[i + 1] === "&") {
       tokens.push({ type: "operator", value: "&&" });
       i += 2; expectCmd = true; continue;
@@ -100,7 +93,6 @@ function tokenizeForHighlight(input: string): Token[] {
       i++; continue;
     }
 
-    // Redirects: >>, >, <
     if (ch === ">" && input[i + 1] === ">") {
       tokens.push({ type: "redirect", value: ">>" });
       i += 2; continue;
@@ -114,7 +106,6 @@ function tokenizeForHighlight(input: string): Token[] {
       i++; continue;
     }
 
-    // Double-quoted string
     if (ch === '"') {
       let s = '"';
       i++;
@@ -127,7 +118,6 @@ function tokenizeForHighlight(input: string): Token[] {
       continue;
     }
 
-    // Single-quoted string
     if (ch === "'") {
       let s = "'";
       i++;
@@ -137,7 +127,6 @@ function tokenizeForHighlight(input: string): Token[] {
       continue;
     }
 
-    // $VAR
     if (ch === "$") {
       let s = "$";
       i++;
@@ -146,7 +135,6 @@ function tokenizeForHighlight(input: string): Token[] {
       continue;
     }
 
-    // Word
     let word = "";
     while (
       i < input.length &&
@@ -175,8 +163,6 @@ function tokenizeForHighlight(input: string): Token[] {
   return tokens;
 }
 
-// ─── Colorize ─────────────────────────────────────────────────────────────────
-
 export function highlight(input: string): string {
   const tokens = tokenizeForHighlight(input);
   let out = "";
@@ -198,7 +184,7 @@ export function highlight(input: string): string {
         out += chalk.cyan(tok.value);
         break;
       case "string_d":
-        out += chalk.hex("#E5A050")(tok.value); // orange
+        out += chalk.hex("#E5A050")(tok.value); 
         break;
       case "string_s":
         out += chalk.hex("#E5A050")(tok.value);
@@ -214,7 +200,7 @@ export function highlight(input: string): string {
         break;
       case "arg":
       default:
-        out += tok.value; // plain white
+        out += tok.value;
         break;
     }
   }

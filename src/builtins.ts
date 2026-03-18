@@ -1,4 +1,4 @@
-import { loadFshrc, generateDefaultFshrc } from "./fshrc";
+import { printNeofetch, isNeofetchEnabled, setNeofetchState } from "./neofetch";
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
@@ -7,8 +7,9 @@ import { pauseInput, resumeInput, reloadHistoryInRl } from "./main";
 import { interactiveTrash } from "./trashLs";
 import { showHistoryManager, loadHistoryEntries } from "./historyManager";
 import { setAlias, removeAlias, getAllAliases } from "./aliases";
+import { loadFshrc, generateDefaultFshrc } from "./fshrc";
 
-const builtins = ["exit", "echo", "type", "pwd", "cd", "ls", "alias", "unalias", "clear", "history", "fshrc", "trash"];
+const builtins = ["exit", "echo", "type", "pwd", "cd", "ls", "alias", "unalias", "clear", "history", "fshrc", "trash", "neofetch"];
 
 export function handleBuiltin(
   cmd: string,
@@ -16,6 +17,11 @@ export function handleBuiltin(
   done: () => void
 ): boolean {
   switch (cmd) {
+    case "neofetch":
+      handleNeofetch(args);
+      done();
+      return true;
+
     case "trash":
       pauseInput();
       interactiveTrash(() => resumeInput());
@@ -36,7 +42,6 @@ export function handleBuiltin(
 
     case "clear": {
       const rows = process.stdout.rows || 24;
-      // Push content out of viewport, then clear screen and scrollback
       process.stdout.write("\n".repeat(rows) + "\x1b[3J\x1b[2J\x1b[H");
       done();
       return true;
@@ -101,7 +106,6 @@ export function handleBuiltin(
 }
 
 function handleAlias(args: string[]) {
-  // No args — list all aliases
   if (args.length === 0) {
     const all = getAllAliases();
     if (all.size === 0) {
@@ -117,7 +121,6 @@ function handleAlias(args: string[]) {
   for (const arg of args) {
     const eq = arg.indexOf("=");
     if (eq === -1) {
-      // alias <name> — show single alias
       const val = getAllAliases().get(arg);
       if (val !== undefined) {
         console.log(`alias ${arg}='${val}'`);
@@ -125,10 +128,8 @@ function handleAlias(args: string[]) {
         console.log(`fsh: alias: ${arg}: not found`);
       }
     } else {
-      // alias <name>=<value>
       const name = arg.slice(0, eq).trim();
       let value = arg.slice(eq + 1).trim();
-      // Strip surrounding quotes if present
       if (
         (value.startsWith("'") && value.endsWith("'")) ||
         (value.startsWith('"') && value.endsWith('"'))
@@ -204,7 +205,6 @@ function handleFshrc(args: string[]) {
   const sub = args[0];
 
   if (sub === "init") {
-    // Create default .fshrc if it doesn't exist
     if (fs.existsSync(FSHRC)) {
       console.log(`~/.fshrc already exists. Use 'fshrc reload' to reload it.`);
       return;
@@ -226,4 +226,22 @@ function handleFshrc(args: string[]) {
   }
 
   console.log(`usage: fshrc [init|reload|path]`);
+}
+
+function handleNeofetch(args: string[]) {
+  const sub = args[0];
+
+  if (sub === "on") {
+    setNeofetchState("on");
+    console.log(chalk.green("✓") + chalk.white(" neofetch enabled — will show on every startup"));
+    return;
+  }
+
+  if (sub === "off") {
+    setNeofetchState("off");
+    console.log(chalk.gray("✗ neofetch disabled"));
+    return;
+  }
+
+  printNeofetch();
 }

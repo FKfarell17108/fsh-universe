@@ -5,8 +5,6 @@ import { getAllAliases } from "./aliases";
 
 const BUILTINS = ["exit", "echo", "type", "pwd", "cd", "ls", "alias", "unalias"];
 
-// ─── Candidate resolution ─────────────────────────────────────────────────────
-
 export function getCandidates(line: string): { candidates: string[]; partial: string } {
   const tokens = tokenizeLine(line);
   const isFirstWord = tokens.length === 0 || (tokens.length === 1 && !line.endsWith(" "));
@@ -88,8 +86,6 @@ export function getFileCandidates(partial: string): { candidates: string[]; base
   return { candidates, baseDir: dir, prefix };
 }
 
-// ─── Longest common prefix ────────────────────────────────────────────────────
-
 export function commonPrefix(strs: string[]): string {
   if (strs.length === 0) return "";
   let prefix = strs[0];
@@ -100,8 +96,6 @@ export function commonPrefix(strs: string[]): string {
   return prefix;
 }
 
-// ─── Inline picker (renders BELOW current prompt line, clears on exit) ────────
-
 export function showPicker(
   candidates: string[],
   onSelect: (chosen: string) => void,
@@ -111,7 +105,6 @@ export function showPicker(
 
   const stdin = process.stdin;
   const maxNameLen = Math.max(...candidates.map((c) => c.length));
-  // Minimum 16 chars wide so short history items (like "ls") don't make tiny columns
   const COL_WIDTH = Math.max(maxNameLen + 2, 16);
   let selectedIndex = 0;
   let pickerLines = 0;
@@ -126,16 +119,13 @@ export function showPicker(
     let frame = "";
 
     if (pickerLines > 0) {
-      // Move back up to just after prompt, clear downward
       frame += `\x1b[${pickerLines}A\r\x1b[J`;
     }
 
-    // Hint — rendered on next line below prompt
     const key = (k: string) => chalk.bgGray.white.bold(` ${k} `);
     const hint = " " + key("↑↓←→") + chalk.gray(" move  ") + key("enter") + chalk.gray(" select  ") + key("esc") + chalk.gray(" cancel");
     frame += "\n" + hint + "\x1b[K\n\x1b[K";
 
-    // Grid
     for (let row = 0; row < totalRows; row++) {
       let line = "\n ";
       for (let col = 0; col < perRow; col++) {
@@ -159,7 +149,6 @@ export function showPicker(
       frame += line + "\x1b[K";
     }
 
-    // hint line + blank line + grid rows
     pickerLines = 2 + totalRows;
 
     process.stdout.write(frame);
@@ -167,7 +156,6 @@ export function showPicker(
 
   function clearPicker() {
     if (pickerLines > 0) {
-      // Move up pickerLines to get back to prompt line, clear everything below
       process.stdout.write(`\x1b[${pickerLines}A\r\x1b[J`);
       pickerLines = 0;
     }
@@ -212,8 +200,6 @@ export function showPicker(
 
   render();
 }
-
-// ─── Tokenizer ────────────────────────────────────────────────────────────────
 
 export function tokenizeLine(line: string): string[] {
   const tokens: string[] = [];

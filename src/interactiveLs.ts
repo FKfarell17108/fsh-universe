@@ -117,8 +117,6 @@ export function interactiveLs(onExit: () => void) {
     setTimeout(onExit, 50);
   }
 
-  // ─── Preview + Delete confirm ──────────────────────────────────────────────
-
   function showDeleteConfirm(entryName: string, isDir: boolean) {
     const full = path.join(cwd, entryName);
     const COLS = process.stdout.columns || 80;
@@ -135,14 +133,11 @@ export function interactiveLs(onExit: () => void) {
       clearOverlay();
       let frame = "\n";
 
-      // Title
       const icon = isDir ? "📁" : "📄";
       frame += ` ${chalk.bold(icon + " " + entryName)}\x1b[K\n`;
       frame += ` ${chalk.gray("─".repeat(Math.min(COLS - 2, 60)))}\x1b[K\n`;
 
-      // Preview content
       if (isDir) {
-        // Show directory contents
         try {
           const children = fs.readdirSync(full, { withFileTypes: true }).slice(0, 10);
           if (children.length === 0) {
@@ -159,7 +154,6 @@ export function interactiveLs(onExit: () => void) {
           frame += `  ${chalk.red("cannot read directory")}\x1b[K\n`;
         }
       } else {
-        // Show file preview (first 8 lines)
         try {
           const content = fs.readFileSync(full, "utf8").split("\n").slice(0, 8);
           for (const line of content) {
@@ -177,7 +171,6 @@ export function interactiveLs(onExit: () => void) {
       frame += `  ${chalk.yellow.bold("Move to Trash")} ${chalk.white(entryName)}${isDir ? chalk.gray(" and all its contents") : ""}?\x1b[K\n`;
       frame += `  ${chalk.bgYellow.black.bold(" y ")} ${chalk.gray("yes    ")}${chalk.bgGray.white.bold(" n ")} ${chalk.gray("no / esc")}\x1b[K\n`;
 
-      // Count actual newlines written
       let lineCount = 0;
       for (let i = 0; i < frame.length; i++) {
         if (frame[i] === "\n") lineCount++;
@@ -201,7 +194,6 @@ export function interactiveLs(onExit: () => void) {
           return;
         }
 
-        // Clear overlay + ls grid together, then re-render ls fresh
         const totalLines = lastRenderedLines + overlayLines;
         process.stdout.write(`\x1b[${totalLines}A\r\x1b[J`);
         lastRenderedLines = 0;
@@ -214,7 +206,6 @@ export function interactiveLs(onExit: () => void) {
       if (key === "n" || key === "N" || key === "\u001b" || key === "\u0003") {
         stdin.removeListener("data", onConfirmKey);
 
-        // Clear overlay + ls grid, re-render ls
         const totalLines = lastRenderedLines + overlayLines;
         process.stdout.write(`\x1b[${totalLines}A\r\x1b[J`);
         lastRenderedLines = 0;
@@ -228,8 +219,6 @@ export function interactiveLs(onExit: () => void) {
     stdin.on("data", onConfirmKey);
     renderOverlay();
   }
-
-  // ─── Main key handler ──────────────────────────────────────────────────────
 
   function onKey(key: string) {
     const perRow = getPerRow();
@@ -262,8 +251,6 @@ export function interactiveLs(onExit: () => void) {
     idx = Math.max(0, Math.min(entries.length - 1, idx));
     if (idx !== selectedIndex) { selectedIndex = idx; render(); }
   }
-
-  // ─── Editor picker ─────────────────────────────────────────────────────────
 
   function showEditorPicker(filePath: string) {
     const editors = getInstalledEditors();
@@ -337,8 +324,6 @@ export function interactiveLs(onExit: () => void) {
     stdin.on("data", onEditorKey);
     renderEditorPicker();
   }
-
-  // ─── Init ──────────────────────────────────────────────────────────────────
 
   stdin.setRawMode(true);
   stdin.resume();

@@ -5,22 +5,18 @@ export const TRASH_DIR = path.join(process.env.HOME ?? "~", ".fsh_trash");
 export const TRASH_META = path.join(TRASH_DIR, ".meta.json");
 
 export type TrashEntry = {
-  id: string;           // unique id
-  name: string;         // original filename
-  originalPath: string; // original full path
-  trashedAt: number;    // timestamp
+  id: string;          
+  name: string;        
+  originalPath: string; 
+  trashedAt: number;   
   isDir: boolean;
 };
-
-// ─── Init ─────────────────────────────────────────────────────────────────────
 
 export function ensureTrashDir() {
   if (!fs.existsSync(TRASH_DIR)) {
     fs.mkdirSync(TRASH_DIR, { recursive: true });
   }
 }
-
-// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export function loadMeta(): TrashEntry[] {
   try {
@@ -33,8 +29,6 @@ export function loadMeta(): TrashEntry[] {
 export function saveMeta(entries: TrashEntry[]) {
   fs.writeFileSync(TRASH_META, JSON.stringify(entries, null, 2), "utf8");
 }
-
-// ─── Move to trash ────────────────────────────────────────────────────────────
 
 export function moveToTrash(fullPath: string): TrashEntry {
   ensureTrashDir();
@@ -61,14 +55,11 @@ export function moveToTrash(fullPath: string): TrashEntry {
   return entry;
 }
 
-// ─── Restore ──────────────────────────────────────────────────────────────────
-
 export function restoreFromTrash(entry: TrashEntry): string | null {
   const src = path.join(TRASH_DIR, entry.id);
 
   if (!fs.existsSync(src)) return "File not found in trash";
 
-  // If original location is taken, restore with (restored) suffix
   let dest = entry.originalPath;
   if (fs.existsSync(dest)) {
     const ext = path.extname(dest);
@@ -80,13 +71,11 @@ export function restoreFromTrash(entry: TrashEntry): string | null {
     fs.renameSync(src, dest);
     const meta = loadMeta().filter((e) => e.id !== entry.id);
     saveMeta(meta);
-    return null; // no error
+    return null;
   } catch (err: any) {
     return err.message;
   }
 }
-
-// ─── Permanent delete ─────────────────────────────────────────────────────────
 
 export function deleteFromTrash(entry: TrashEntry): string | null {
   const src = path.join(TRASH_DIR, entry.id);

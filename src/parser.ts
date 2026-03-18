@@ -1,5 +1,3 @@
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 export type Redirect = {
   type: ">" | ">>" | "<";
   file: string;
@@ -11,20 +9,16 @@ export type Command = {
   redirects: Redirect[];
 };
 
-// A pipeline is a sequence of commands connected by |
 export type Pipeline = {
   commands: Command[];
-  background: boolean; // trailing &
+  background: boolean;
 };
 
-// A statement is pipelines connected by ;, &&, or ||
 export type Statement =
   | { kind: "pipeline"; pipeline: Pipeline }
-  | { kind: "and"; left: Statement; right: Statement }   // &&
-  | { kind: "or"; left: Statement; right: Statement }    // ||
-  | { kind: "seq"; left: Statement; right: Statement };  // ;
-
-// ─── Tokenizer ───────────────────────────────────────────────────────────────
+  | { kind: "and"; left: Statement; right: Statement } 
+  | { kind: "or"; left: Statement; right: Statement }
+  | { kind: "seq"; left: Statement; right: Statement }; 
 
 type Token =
   | { type: "word"; value: string }
@@ -49,10 +43,8 @@ function tokenize(input: string): Token[] {
   while (i < input.length) {
     const ch = input[i];
 
-    // Skip whitespace
     if (ch === " " || ch === "\t") { i++; continue; }
 
-    // Operators: &&, ||, >>, >, <, |, ;, &
     if (ch === "&" && input[i + 1] === "&") { tokens.push({ type: "and" }); i += 2; continue; }
     if (ch === "|" && input[i + 1] === "|") { tokens.push({ type: "or" }); i += 2; continue; }
     if (ch === ">" && input[i + 1] === ">") { tokens.push({ type: "redir", op: ">>" }); i += 2; continue; }
@@ -62,7 +54,6 @@ function tokenize(input: string): Token[] {
     if (ch === ";") { tokens.push({ type: "semi" }); i++; continue; }
     if (ch === "&") { tokens.push({ type: "amp" }); i++; continue; }
 
-    // Word (quoted or unquoted)
     let word = "";
     let escape = false;
 
@@ -72,7 +63,6 @@ function tokenize(input: string): Token[] {
       if (escape) { word += c; escape = false; i++; continue; }
       if (c === "\\") { escape = true; i++; continue; }
 
-      // Double-quoted string — expand vars inside
       if (c === '"') {
         i++;
         while (i < input.length && input[i] !== '"') {
@@ -84,21 +74,19 @@ function tokenize(input: string): Token[] {
           }
           i++;
         }
-        i++; // closing "
+        i++;
         continue;
       }
 
-      // Single-quoted string — no expansion
       if (c === "'") {
         i++;
         while (i < input.length && input[i] !== "'") {
           word += input[i++];
         }
-        i++; // closing '
+        i++;
         continue;
       }
 
-      // Stop word at operators or whitespace
       if (
         c === " " || c === "\t" ||
         c === "|" || c === ">" || c === "<" ||
@@ -117,8 +105,6 @@ function tokenize(input: string): Token[] {
   return tokens;
 }
 
-// ─── Parser ──────────────────────────────────────────────────────────────────
-
 class Parser {
   private pos = 0;
   constructor(private tokens: Token[]) {}
@@ -126,7 +112,6 @@ class Parser {
   peek(): Token | undefined { return this.tokens[this.pos]; }
   consume(): Token { return this.tokens[this.pos++]; }
 
-  // statement := and_or ( ';' and_or )*
   parseStatement(): Statement | null {
     let left = this.parseAndOr();
     if (!left) return null;
@@ -141,7 +126,6 @@ class Parser {
     return left;
   }
 
-  // and_or := pipeline ( ('&&' | '||') pipeline )*
   parseAndOr(): Statement | null {
     let left = this.parsePipeline();
     if (!left) return null;
@@ -166,7 +150,6 @@ class Parser {
     return left;
   }
 
-  // pipeline := command ( '|' command )* ['&']
   parsePipeline(): Statement | null {
     const first = this.parseCommand();
     if (!first) return null;
@@ -188,7 +171,6 @@ class Parser {
     return { kind: "pipeline", pipeline: { commands, background } };
   }
 
-  // command := word+ redirect*
   parseCommand(): Command | null {
     const words: string[] = [];
     const redirects: Redirect[] = [];
@@ -221,8 +203,6 @@ class Parser {
     };
   }
 }
-
-// ─── Public API ──────────────────────────────────────────────────────────────
 
 export function parseInput(input: string): Statement | null {
   const tokens = tokenize(input);

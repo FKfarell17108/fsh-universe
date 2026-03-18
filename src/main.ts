@@ -13,19 +13,17 @@ import {
 } from "./historyManager";
 import { highlight } from "./highlight";
 import { loadFshrc } from "./fshrc";
+import { printNeofetch, isNeofetchEnabled } from "./neofetch";
 
-// Load config first thing
 loadFshrc();
 
-// ─── State ────────────────────────────────────────────────────────────────────
+if (isNeofetchEnabled()) printNeofetch();
 
 let rl: readline.Interface;
 let historyEntries: HistoryEntry[] = loadHistoryEntries();
 let savedHistory: string[] = entriesToStrings(historyEntries);
 let tabHandlerActive = false;
 let lastExitCodeForPrompt = 0;
-
-// ─── Prompt ───────────────────────────────────────────────────────────────────
 
 export function getPrompt(): string {
   const cwd = process.cwd();
@@ -44,8 +42,6 @@ export function getPrompt(): string {
 export function setLastExitCode(code: number) {
   lastExitCodeForPrompt = code;
 }
-
-// ─── Input management ─────────────────────────────────────────────────────────
 
 export function pauseInput() {
   if (rl) {
@@ -71,8 +67,6 @@ export function reloadHistoryInRl(updated: HistoryEntry[]) {
     (rl as any).history = savedHistory.slice();
   }
 }
-
-// ─── Tab intercept ────────────────────────────────────────────────────────────
 
 function setupTabIntercept() {
   const rlAny = rl as any;
@@ -119,7 +113,6 @@ function setupTabIntercept() {
     return original(s, key);
   };
 
-  // After every keypress, re-render the line with syntax colors
   const origRefresh = rlAny._refreshLine?.bind(rl);
   if (origRefresh) {
     rlAny._refreshLine = function () {
@@ -128,12 +121,10 @@ function setupTabIntercept() {
 
       if (line.length === 0) return origRefresh();
 
-      // Swap in highlighted line, keep cursor at same logical position
       const highlighted = highlight(line);
       rlAny.line = highlighted;
-      rlAny.cursor = highlighted.length; // always end — readline will reposition
+      rlAny.cursor = highlighted.length;
       origRefresh();
-      // Restore real values immediately
       rlAny.line = line;
       rlAny.cursor = cursor;
     };
@@ -160,8 +151,6 @@ function resumeInputWithLine(restoreLine: string) {
     promptWithLine(restoreLine);
   }, 50);
 }
-
-// ─── rl management ────────────────────────────────────────────────────────────
 
 function createRl() {
   if (rl) {
@@ -201,8 +190,6 @@ function setLine(newLine: string) {
   rlAny._refreshLine?.();
 }
 
-// ─── Prompting ────────────────────────────────────────────────────────────────
-
 export function startPrompt() {
   createRl();
   prompt();
@@ -215,7 +202,6 @@ function prompt() {
     const cleanInput = input.trim();
     if (!cleanInput) return prompt();
 
-    // Push to timestamped history
     historyEntries = pushEntry(historyEntries, cleanInput);
     savedHistory = entriesToStrings(historyEntries);
     saveHistoryEntries(historyEntries);

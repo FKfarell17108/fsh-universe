@@ -1,5 +1,3 @@
-// ─── Alias store ─────────────────────────────────────────────────────────────
-
 const aliasMap = new Map<string, string>();
 
 export function setAlias(name: string, value: string) {
@@ -18,8 +16,6 @@ export function getAllAliases(): Map<string, string> {
   return aliasMap;
 }
 
-// Expand alias at the start of a raw input string.
-// Only expands the first word (command position), handles chained aliases.
 export function expandAliases(input: string): string {
   const seen = new Set<string>();
 

@@ -11,7 +11,6 @@ export function getLastExitCode(): number {
   return lastExitCode;
 }
 
-// Commands that need a full PTY to work properly
 const PTY_COMMANDS = new Set([
   "vim", "vi", "nvim", "nano", "emacs", "micro", "helix", "hx",
   "htop", "btop", "top", "atop",
@@ -30,7 +29,7 @@ function needsPty(cmd: string): boolean {
 
 export function execute(statement: Statement | null, callback: () => void) {
   if (!statement) return callback();
-  lastExitCode = 0; // reset before each execution
+  lastExitCode = 0;
   executeStatement(statement, callback);
 }
 
@@ -82,7 +81,6 @@ function runPipeline(commands: Command[], done: () => void) {
     return;
   }
 
-  // Pipeline — always use regular spawn (pty doesn't make sense mid-pipe)
   const children: ReturnType<typeof spawn>[] = [];
 
   commands.forEach((command, index) => {
@@ -121,8 +119,6 @@ function runPipeline(commands: Command[], done: () => void) {
   });
 }
 
-// ─── PTY spawn (vim, nano, htop, etc.) ───────────────────────────────────────
-
 function spawnWithPty(command: Command, done: () => void) {
   const cols = process.stdout.columns || 80;
   const rows = process.stdout.rows || 24;
@@ -147,26 +143,21 @@ function spawnWithPty(command: Command, done: () => void) {
     return done();
   }
 
-  // Pause readline so it doesn't compete with PTY for stdin
   pauseInput();
 
-  // Now take over stdin in raw mode — only we listen, no readline interference
   process.stdin.setRawMode(true);
   process.stdin.resume();
   process.stdin.setEncoding("utf8");
 
-  // PTY output → our stdout
   term.onData((data) => {
     process.stdout.write(data);
   });
 
-  // Our raw stdin → PTY input
   const onData = (data: string) => {
     term.write(data);
   };
   process.stdin.on("data", onData);
 
-  // Forward terminal resize to PTY
   const onResize = () => {
     term.resize(process.stdout.columns || 80, process.stdout.rows || 24);
   };
@@ -180,12 +171,9 @@ function spawnWithPty(command: Command, done: () => void) {
 
     lastExitCode = exitCode ?? 0;
 
-    // resumeInput() will call prompt() itself — don't call done()
     setTimeout(() => resumeInput(), 30);
   });
 }
-
-// ─── Regular spawn (cat, grep, ping, etc.) ───────────────────────────────────
 
 function spawnExternal(command: Command, done: () => void) {
   const child = spawn(command.cmd, command.args, {
@@ -213,8 +201,6 @@ function spawnExternal(command: Command, done: () => void) {
     if (!hadError) done();
   });
 }
-
-// ─── Redirection helpers ─────────────────────────────────────────────────────
 
 function resolveStdin(cmd: Command): any {
   const r = cmd.redirects.find((r) => r.type === "<");

@@ -8,15 +8,11 @@ import {
 
 const COLS = () => process.stdout.columns || 80;
 
-// ─── Shared render helpers ────────────────────────────────────────────────────
-
 function countLines(frame: string): number {
   let n = 0;
   for (const c of frame) if (c === "\n") n++;
   return n;
 }
-
-// ─── Directory browser (recursive, used inside preview) ───────────────────────
 
 function browseDir(
   dirPath: string,
@@ -96,7 +92,6 @@ function browseDir(
           render();
         });
       } else {
-        // Show file preview
         stdin.removeListener("data", onKey);
         cleanup();
         browseFile(fullPath, entry.name, stdin, () => {
@@ -152,8 +147,6 @@ function browseFile(
   stdin.on("data", onKey);
 }
 
-// ─── Main trash viewer ────────────────────────────────────────────────────────
-
 export function interactiveTrash(onExit: () => void) {
   const stdin = process.stdin;
   let entries = loadMeta();
@@ -166,7 +159,7 @@ export function interactiveTrash(onExit: () => void) {
   let sel = 0;
   let lastLines = 0;
 
-  const HINT_LINES = 2; // hint line + blank line
+  const HINT_LINES = 2;
 
   function renderHint() {
     const k = (s: string) => chalk.bgGray.white.bold(` ${s} `);
@@ -239,8 +232,6 @@ export function interactiveTrash(onExit: () => void) {
     stdin.on("data", onKey);
     render();
   }
-
-  // ─── Preview ────────────────────────────────────────────────────────────────
 
   function showPreview(entry: TrashEntry) {
     const src = path.join(TRASH_DIR, entry.id);
@@ -325,7 +316,6 @@ export function interactiveTrash(onExit: () => void) {
         return;
       }
       if (key === "o" && entry.isDir) {
-        // Browse directory contents
         stdin.removeListener("data", onPreviewKey);
         clearPreview();
         browseDir(src, entry.name, stdin, () => {
@@ -341,8 +331,6 @@ export function interactiveTrash(onExit: () => void) {
     stdin.on("data", onPreviewKey);
     renderPreview();
   }
-
-  // ─── Main key handler ───────────────────────────────────────────────────────
 
   function onKey(key: string) {
     if (key === "\u001b" || key === "\u0003") return exit();
@@ -366,7 +354,6 @@ export function interactiveTrash(onExit: () => void) {
     }
 
     if (key === "D") {
-      // Show confirmation
       const msg = `\n  ${chalk.red.bold("Empty trash?")} ${chalk.gray("This will permanently delete all items.")}\n` +
                   `  ${chalk.bgRed.white.bold(" y ")} ${chalk.gray("yes    ")}${chalk.bgGray.white.bold(" n ")} ${chalk.gray("no / esc")}\n`;
       const confirmLines = 3;
@@ -374,7 +361,6 @@ export function interactiveTrash(onExit: () => void) {
 
       stdin.removeListener("data", onKey);
       stdin.on("data", function onConfirm(key: string) {
-        // Clear confirmation
         process.stdout.write(`\x1b[${confirmLines}A\r\x1b[J`);
 
         if (key === "y" || key === "Y") {
