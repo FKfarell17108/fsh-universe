@@ -1,4 +1,4 @@
-# FSH (FK Shell)
+# FSH (FK Shell) v1.0.0
 
 > A custom Unix shell built from scratch in TypeScript, designed for a modern and interactive terminal experience.
 
