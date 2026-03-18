@@ -17,10 +17,10 @@ const PTY_COMMANDS = new Set([
   "htop", "btop", "top", "atop",
   "less", "more", "man",
   "fzf", "ranger", "nnn", "mc",
-  "ssh", "tmux", "screen",
+  "ssh", "ssh-keygen", "ssh-add", "scp", "sftp", "tmux", "screen",
   "python", "python3", "node", "irb", "ghci", "lua",
   "bash", "zsh", "fish", "sh",
-  "git",
+  "git", "sudo", "su",
 ]);
 
 function needsPty(cmd: string): boolean {
