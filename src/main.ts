@@ -15,6 +15,7 @@ import {
 import { highlight } from "./highlight";
 import { loadFshrc } from "./fshrc";
 import { printNeofetch, isNeofetchEnabled } from "./neofetch";
+import { showSearch } from "./search";
 
 loadFshrc();
 
@@ -137,14 +138,8 @@ function setupTabIntercept() {
 
     if (tabHandlerActive && key.name === "tab") return;
 
-    if (
-      tabHandlerActive    &&
-      !key.ctrl           &&
-      !key.meta           &&
-      s === "h"           &&
-      (rlAny.line ?? "") === ""
-    ) {
-      openHistory();
+    if (tabHandlerActive && key.sequence === "\x12") {
+      openSearch();
       return;
     }
 
@@ -184,6 +179,16 @@ function openHistory() {
     reloadHistoryInRl(updated);
     resumeInput();
   });
+}
+
+function openSearch() {
+  tabHandlerActive = false;
+  pauseInput();
+  showSearch(
+    historyEntries,
+    (value) => resumeInputWithLine(value),
+    () => resumeInput()
+  );
 }
 
 function openPicker(candidates: string[], line: string, partial: string) {
