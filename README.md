@@ -1,14 +1,14 @@
 # FSH (FK Shell) v1.0.0
 
-> A custom Unix shell built from scratch using TypeScript, designed to offer a unique terminal experience.
+> A custom Unix shell, developed using TypeScript, and designed specifically for FK Universe to deliver a unique terminal experience.
 
 ---
 
 ## What is fsh?
 
-**FSH** (FK Shell) is a full-featured Unix shell developed from scratch using TypeScript and Node.js. FSH replaces the default shell (bash/zsh) and provides all standard shell features, such as executing commands, piping, and redirection.
+**FSH** (FK Shell) is a full-featured Unix shell developed using TypeScript and Node.js. FSH replaces the default shell (bash/zsh) and provides all standard shell features, such as executing commands, piping, and redirection.
 
-**Shell** is a program that runs when you open a terminal. It reads commands, executes them, and displays the results. FSH does all of that, and significantly enhances the experience with features like file browsing, tab-based autocompletion, history management, and much more.
+**Shell** is a program that interprets what we type in the terminal. It operates using the REPL (Read, Evaluate, Print, Loop) model. FSH is capable of doing all of that, while significantly enhancing the user experience to meet the specific needs of the FK Universe, such as an interactive terminal, a history manager, a trash system, an auto-completion system, and much more.
 
 ---
 
