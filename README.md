@@ -243,5 +243,5 @@ neofetch off    # disable
 
 ## © 2026 Farell Kurniawan
 
-Copyright © 2026 Farell Kurniawan. All rights reserved.  
-Distribution and use of this code is permitted under the terms of the **MIT** license.
+This project is proprietary software. All rights reserved.
+Unauthorized use, copying, or distribution is strictly prohibited.
