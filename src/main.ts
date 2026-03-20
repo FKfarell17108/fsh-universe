@@ -16,6 +16,7 @@ import { loadFshrc } from "./fshrc";
 import { printNeofetch, isNeofetchEnabled } from "./neofetch";
 import { showSearch } from "./search";
 import { showGeneralHistory, loadGeneralHistory, logEvent } from "./generalHistory";
+import { openFileOpsLogFromMain } from "./fileOpsLog";
 import { loadLog } from "./fileOps";
 
 loadFshrc();
@@ -31,14 +32,18 @@ let tabHandlerActive               = false;
 let lastExitCodeForPrompt          = 0;
 let inputPaused                    = false;
 
+// Global SIGINT guard: absorb SIGINT ONLY during interactive UI transitions
+// (when _absorbSigint=true / inputPaused=true).
+// When false: readline handles it, or executor's per-child handler does.
+// An empty handler here would prevent SIGINT from reaching child processes.
+let _absorbSigint = false;
+export function setAbsorbSigint(v: boolean) { _absorbSigint = v; }
+
 process.on("SIGINT", () => {
-  if (inputPaused) {
-    try {
-      process.stdout.write("\x1b[?25h\x1b[?1049l\x1b[0m\x1b[2J\x1b[H");
-      if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    } catch {}
-    return;
-  }
+  // Absorb silently during interactive UI transitions.
+  // During spawnExternal: _absorbSigint is false, executor's own
+  // sigintHandler forwards SIGINT to the child process.
+  if (_absorbSigint) return;
 });
 
 export function isInputPaused(): boolean { return inputPaused; }
@@ -57,7 +62,8 @@ export function setLastExitCode(code: number) {
 }
 
 export function pauseInput() {
-  inputPaused = true;
+  inputPaused   = true;
+  _absorbSigint = true;
   if (rl) {
     savedHistory = (rl as any).history?.slice() ?? [];
     saveHistoryEntries(historyEntries);
@@ -69,13 +75,39 @@ export function pauseInput() {
 }
 
 export function resumeInput() {
-  inputPaused = false;
+  inputPaused   = false;
+  _absorbSigint = false;
   try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
   setTimeout(() => { createRl(); prompt(); }, 50);
 }
 
+// Pause readline without setting _absorbSigint — used by spawnExternal
+// so Ctrl+C is NOT intercepted by the global SIGINT guard.
+export function pauseInputForExternal() {
+  inputPaused = true;
+  // _absorbSigint stays false — executor registers its own sigintHandler
+  if (rl) {
+    savedHistory = (rl as any).history?.slice() ?? [];
+    saveHistoryEntries(historyEntries);
+    rl.close();
+    (rl as any) = null;
+  }
+  tabHandlerActive = false;
+  try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
+}
+
+// Like resumeInput but calls callback instead of prompt() after rl is ready.
+// Used by spawnExternal so the executor done() callback runs with rl active.
+export function resumeInputThen(cb: () => void) {
+  inputPaused   = false;
+  _absorbSigint = false;
+  try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
+  setTimeout(() => { createRl(); cb(); }, 50);
+}
+
 export function resumeInputAndExecute(cmdLine: string) {
-  inputPaused = false;
+  inputPaused   = false;
+  _absorbSigint = false;
   try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
   setTimeout(() => {
     createRl();
@@ -117,11 +149,13 @@ function setupTabIntercept() {
   rlAny._ttyWrite = function (s: string, key: any) {
     if (!key) return original(s, key);
 
+    // Ctrl+H = general history / file ops log
     if (tabHandlerActive && key.sequence === "\x08") {
       openGeneralHistory();
       return;
     }
 
+    // Ctrl+R = fuzzy search
     if (tabHandlerActive && key.sequence === "\x12") {
       openSearch();
       return;
@@ -237,7 +271,8 @@ function openCompletionPicker(candidates: string[], line: string, partial: strin
 }
 
 function resumeInputWithLine(restoreLine: string) {
-  inputPaused = false;
+  inputPaused   = false;
+  _absorbSigint = false;
   try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
   setTimeout(() => { createRl(); promptWithLine(restoreLine); }, 50);
 }

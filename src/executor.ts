@@ -3,7 +3,7 @@ import * as pty from "node-pty";
 import fs from "fs";
 import { handleBuiltin } from "./builtins";
 import { Statement, Pipeline, Command } from "./parser";
-import { pauseInput, resumeInput, isInputPaused } from "./main";
+import { pauseInput, pauseInputForExternal, resumeInput, resumeInputThen, isInputPaused } from "./main";
 
 let lastExitCode = 0;
 
@@ -85,11 +85,11 @@ function runPipeline(commands: Command[], done: () => void) {
 
   commands.forEach((command, index) => {
     const isFirst = index === 0;
-    const isLast = index === commands.length - 1;
+    const isLast  = index === commands.length - 1;
 
     const stdio: StdioOptions = [
-      isFirst ? resolveStdin(command) : "pipe",
-      isLast ? resolveStdout(command) : "pipe",
+      isFirst ? resolveStdin(command)  : "pipe",
+      isLast  ? resolveStdout(command) : "pipe",
       "pipe",
     ];
 
@@ -178,37 +178,54 @@ function spawnWithPty(command: Command, done: () => void) {
     process.stdout.removeListener("resize", onResize);
     process.stdin.setRawMode(false);
     process.stdin.pause();
-
     lastExitCode = exitCode ?? 0;
-
     setTimeout(() => resumeInput(), 30);
   });
 }
 
 function spawnExternal(command: Command, done: () => void) {
+  // Pause readline (without setting _absorbSigint) so TTY is in normal mode.
+  // This ensures Ctrl+C generates a real SIGINT to the process group
+  // instead of being swallowed by readline's SIGINT event handler.
+  pauseInputForExternal();
+
   const child = spawn(command.cmd, command.args, {
     stdio: [resolveStdin(command), resolveStdout(command), resolveStderr(command)],
     env: process.env,
   });
 
-  const sigintHandler = () => {};
+  let hadError  = false;
+  let childDone = false;
+
+  // Safety-net: also forward SIGINT explicitly in case TTY process group
+  // signal doesn't reach child (e.g. when stdin is redirected).
+  const sigintHandler = () => {
+    if (!childDone) {
+      try { child.kill("SIGINT"); } catch {}
+    }
+  };
   process.on("SIGINT", sigintHandler);
-  let hadError = false;
 
   child.on("error", (err: NodeJS.ErrnoException) => {
     hadError = true;
-    printSpawnError(command.cmd, err);
+    childDone = true;
     process.removeListener("SIGINT", sigintHandler);
-    done();
+    printSpawnError(command.cmd, err);
+    // resumeInputThen(done) recreates readline then calls done() once — safe.
+    resumeInputThen(done);
   });
 
-  child.on("exit", (code) => {
+  child.on("exit", (code, signal) => {
+    if (childDone) return;
+    childDone = true;
     process.removeListener("SIGINT", sigintHandler);
     if (!hadError) {
-      lastExitCode = code ?? 0;
+      lastExitCode = code ?? (signal === "SIGINT" ? 130 : 1);
     }
     if (process.stdout.isTTY) process.stdout.write("\x1b[?25h");
-    if (!hadError) done();
+    // resumeInputThen(done) recreates readline then calls done() once — safe.
+    if (!hadError) resumeInputThen(done);
+    else resumeInputThen(() => {});
   });
 }
 
