@@ -279,13 +279,13 @@ All interactive screens share the same structure:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  ↑↓←→ Move   Spc Select   A All   Ent Open   Tab Parent  ...   │  ← navbar row 1
+│  ↑↓←→ Move   Spc Select   A All   Ent Open   Tab Parent  ...    │  ← navbar row 1
 │  C Copy   X Cut   V Paste   R Rename   D Delete   . Hidden ...  │  ← navbar row 2 (> 7 items)
 │  ─────────────────────────────────────────────────────────────  │  ← separator
-│                                                                  │
-│  [content area]                                                  │
-│                                                                  │
-│  ~/projects/fsh-universe  4d  12f  2 hidden      ↓ 8 more      │  ← bottom bar
+│                                                                 │
+│  [content area]                                                 │
+│                                                                 │
+│  ~/projects/fsh-universe  4d  12f  2 hidden      ↓ 8 more       │  ← bottom bar
 └─────────────────────────────────────────────────────────────────┘
 ```
 
