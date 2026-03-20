@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
+import { logEvent } from "./generalHistory";
 
 export type OpKind = "copy" | "cut" | "rename" | "move";
 
@@ -48,21 +49,15 @@ function makeId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
-export function getClipboard(): Clipboard {
-  return clipboard;
+function homify(p: string): string {
+  const home = process.env.HOME ?? "";
+  return home && p.startsWith(home) ? "~" + p.slice(home.length) : p;
 }
 
-export function setClipboard(c: Clipboard): void {
-  clipboard = c;
-}
-
-export function clearClipboard(): void {
-  clipboard = null;
-}
-
-export function getLog(): FileOp[] {
-  return opLog;
-}
+export function getClipboard(): Clipboard { return clipboard; }
+export function setClipboard(c: Clipboard): void { clipboard = c; }
+export function clearClipboard(): void { clipboard = null; }
+export function getLog(): FileOp[] { return opLog; }
 
 function pushOp(op: FileOp): void {
   opLog.unshift(op);
@@ -90,6 +85,7 @@ export function execCopy(srcFull: string, destFull: string): string | null {
     copyRecursive(srcFull, destFull);
     op.status = "done";
     pushOp(op);
+    logEvent("copy", srcName, `${homify(srcFull)}  →  ${homify(destFull)}`);
     return null;
   } catch (e: any) {
     op.status = "error";
@@ -119,6 +115,7 @@ export function execMove(srcFull: string, destFull: string): string | null {
     fs.renameSync(srcFull, destFull);
     op.status = "done";
     pushOp(op);
+    logEvent("move", srcName, `${homify(srcFull)}  →  ${homify(destFull)}`);
     return null;
   } catch (e: any) {
     try {
@@ -126,6 +123,7 @@ export function execMove(srcFull: string, destFull: string): string | null {
       fs.rmSync(srcFull, { recursive: true, force: true });
       op.status = "done";
       pushOp(op);
+      logEvent("move", srcName, `${homify(srcFull)}  →  ${homify(destFull)}`);
       return null;
     } catch (e2: any) {
       op.status = "error";
@@ -158,6 +156,7 @@ export function execRename(srcFull: string, newName: string): string | null {
     fs.renameSync(srcFull, destFull);
     op.status = "done";
     pushOp(op);
+    logEvent("rename", srcName, `${srcName}  →  ${newName}  (in ${homify(path.dirname(srcFull))})`);
     return null;
   } catch (e: any) {
     op.status = "error";

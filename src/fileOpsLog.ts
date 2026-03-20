@@ -137,17 +137,42 @@ function runLogPanel(stdin: NodeJS.ReadStream, onBack: () => void, ownsAltScreen
 
   function onResize() { w("\x1b[2J"); adjustScroll(); fullDraw(); }
 
+  function cleanup() {
+    process.stdout.removeListener("resize", onResize);
+    stdin.removeAllListeners("data");
+    if (ownsAltScreen) {
+      w("\x1b[2J\x1b[H");
+      exitAlt();
+    } else {
+      w("\x1b[0m");
+    }
+  }
+
+  function exit() {
+    cleanup();
+    setTimeout(onBack, 20);
+  }
+
   function showDetail(op: FileOp) {
     process.stdout.removeListener("resize", onResize);
+
     function onDetailResize() {
       w("\x1b[2J");
-      drawNavbar([kb("esc") + chalk.gray(" back")]);
+      drawNavbar([kb("esc") + chalk.gray(" back  ") + kb("^C") + chalk.gray(" quit")]);
       w(drawDetailScreen(op));
     }
+
     process.stdout.on("resize", onDetailResize);
 
     function onDetailKey(k: string) {
-      if (k === "\u001b" || k === "\u0003" || k === "q") {
+      if (k === "\u0003") {
+        stdin.removeListener("data", onDetailKey);
+        process.stdout.removeListener("resize", onDetailResize);
+        cleanup();
+        setTimeout(onBack, 20);
+        return;
+      }
+      if (k === "\u001b" || k === "q") {
         stdin.removeListener("data", onDetailKey);
         process.stdout.removeListener("resize", onDetailResize);
         process.stdout.on("resize", onResize);
@@ -160,25 +185,14 @@ function runLogPanel(stdin: NodeJS.ReadStream, onBack: () => void, ownsAltScreen
     stdin.removeListener("data", onKey);
     stdin.on("data", onDetailKey);
     w("\x1b[2J");
-    drawNavbar([kb("esc") + chalk.gray(" back")]);
+    drawNavbar([kb("esc") + chalk.gray(" back  ") + kb("^C") + chalk.gray(" quit")]);
     w(drawDetailScreen(op));
-  }
-
-  function cleanup() {
-    process.stdout.removeListener("resize", onResize);
-    stdin.removeAllListeners("data");
-    if (ownsAltScreen) exitAlt();
-  }
-
-  function exit() {
-    cleanup();
-    setTimeout(onBack, 20);
   }
 
   function onKey(raw: string) {
     if (raw === "\u001b[A") { if (sel > 0) { sel--; adjustScroll(); fullDraw(); } return; }
     if (raw === "\u001b[B") { if (sel < ops.length - 1) { sel++; adjustScroll(); fullDraw(); } return; }
-    if (raw === "\u001b" || raw === "\u0003" || raw === "q") return exit();
+    if (raw === "\u0003" || raw === "\u001b" || raw === "q") return exit();
     if (raw.startsWith("\u001b")) return;
     if (raw === "\r" && ops.length > 0) showDetail(ops[sel]);
   }
@@ -189,7 +203,9 @@ function runLogPanel(stdin: NodeJS.ReadStream, onBack: () => void, ownsAltScreen
   stdin.setEncoding("utf8");
   stdin.on("data", onKey);
 
-  if (ownsAltScreen) { enterAlt(); }
+  if (ownsAltScreen) {
+    enterAlt();
+  }
   w("\x1b[2J");
   fullDraw();
 }

@@ -2,11 +2,11 @@ import { printNeofetch, isNeofetchEnabled, setNeofetchState } from "./neofetch";
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
-import { interactiveLs, pendingOpen, clearPendingOpen } from "./interactiveLs";
+import { interactiveLs, LsResult } from "./interactiveLs";
 import { interactiveDir } from "./interactiveDir";
-import { pauseInput, resumeInput, reloadHistoryInRl } from "./main";
+import { pauseInput, resumeInput, resumeInputAndExecute, reloadHistoryInRl } from "./main";
+import { showGeneralHistory } from "./generalHistory";
 import { interactiveTrash } from "./trashLs";
-import { showHistoryManager, loadHistoryEntries } from "./historyManager";
 import { setAlias, removeAlias, getAllAliases } from "./aliases";
 import { loadFshrc, generateDefaultFshrc } from "./fshrc";
 
@@ -31,17 +31,14 @@ export function handleBuiltin(
       interactiveTrash(() => resumeInput());
       return true;
 
+    case "history":
+      pauseInput();
+      showGeneralHistory(() => resumeInput());
+      return true;
+
     case "fshrc":
       handleFshrc(args);
       done();
-      return true;
-
-    case "history":
-      pauseInput();
-      showHistoryManager(loadHistoryEntries(), (updated) => {
-        reloadHistoryInRl(updated);
-        resumeInput();
-      });
       return true;
 
     case "clear": {
@@ -76,18 +73,10 @@ export function handleBuiltin(
 
     case "ls":
       pauseInput();
-      interactiveLs(() => {
-        const open = pendingOpen;
-        clearPendingOpen();
-
-        if (open) {
-          const { execute } = require("./executor");
-          const { parseInput } = require("./parser");
-          resumeInput();
-          setTimeout(() => {
-            const stmt = parseInput(`${open.editor} "${open.file}"`);
-            execute(stmt, () => {});
-          }, 60);
+      interactiveLs((result: LsResult) => {
+        if (result.kind === "open") {
+          const cmdLine = `${result.editor} "${result.file}"`;
+          resumeInputAndExecute(cmdLine);
         } else {
           resumeInput();
         }
@@ -156,7 +145,7 @@ function handleAlias(args: string[]) {
 
 function handleUnalias(args: string[]) {
   if (args.length === 0) {
-    console.log("usage: unalias <name>");
+    console.log("usage: unalias <n>");
     return;
   }
   for (const name of args) {

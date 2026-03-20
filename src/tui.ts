@@ -7,7 +7,7 @@ export const C   = () => process.stdout.columns || 80;
 export const R   = () => process.stdout.rows    || 24;
 
 export const FOOTER_ROWS = 1;
-export const NAVBAR_ROWS = 2; // kept for compat, use getNR() for actual value
+export const NAVBAR_ROWS = 2;
 
 let _navbarRows = 2;
 export function getNR(): number { return _navbarRows; }
@@ -32,40 +32,23 @@ export function padOrTrim(str: string, width: number): string {
   return out + chalk.reset("");
 }
 
-// Split a hint string into individual key+label tokens so we can wrap them
-// across 2 navbar rows. Each token is like: kb("x") + gray(" label  ")
-// We detect boundaries by looking for the grey reset pattern between tokens.
 function splitHintTokens(hint: string): string[] {
-  // Tokens are separated by visible space sequences between ANSI runs.
-  // Strategy: split on pattern reset+bgGray (start of a new kb()) boundary.
-  // We scan for '\x1b[0m' followed (after other escapes) by '\x1b[' which
-  // starts the next kb bgGray — that's the boundary between tokens.
   const tokens: string[] = [];
   let current = "";
   let i = 0;
 
   while (i < hint.length) {
-    // Detect start of a new kb() block: bgGray escape \x1b[4...m or similar
-    // More reliable: split just before each " \x1b[" that starts a bgGray kb
-    // Pattern: visible space(s) then \x1b[47m or \x1b[100m (bgGray variants)
     const rest = hint.slice(i);
-    // Match: end of previous label (gray text ends) then start of new kb block
-    // A kb block starts with chalk.bgGray which produces \x1b[XX;Xm` \x1b[Xm`
-    // Simplest: split at every occurrence of "  " + ESC that's after content
     const match = rest.match(/^(\x1b\[[0-9;]*m)/);
     if (match) {
       current += match[0];
       i += match[0].length;
       continue;
     }
-    // Check if we're at a natural split point: after gray label text,
-    // before a new kb() — indicated by multiple spaces then ESC[
     const splitMatch = rest.match(/^(  +)(\x1b\[)/);
     if (splitMatch && current.length > 0 && visibleLen(current) > 4) {
-      // Trim trailing spaces from current token, push, start new
       tokens.push(current);
       current = "";
-      // skip the separator spaces (but keep one for indent)
       i += splitMatch[1].length;
       continue;
     }
@@ -82,7 +65,6 @@ export function drawNavbar(hints: string[], right?: string): number {
   const rightLen = visibleLen(rightStr);
   const avail    = cols - 2 - rightLen;
 
-  // Try to fit the most complete hint in 1 row
   let chosen: string | null = null;
   for (const h of hints) {
     if (visibleLen(h) <= avail) { chosen = h; break; }
@@ -91,24 +73,21 @@ export function drawNavbar(hints: string[], right?: string): number {
   let out = "";
 
   if (chosen !== null) {
-    // Single row navbar
     _navbarRows = 2;
     const row1 = padOrTrim(" " + chosen, cols - rightLen) +
                  (rightLen > 0 ? chalk.bgBlack.dim(rightStr) : "");
     out  = at(1, 1) + clr() + chalk.bgBlack.white(row1);
     out += at(2, 1) + clr() + chalk.dim("─".repeat(cols));
   } else {
-    // Need 2 content rows — split the fullest hint across 2 lines
     _navbarRows = 3;
-    const fullHint = hints[0]; // most complete hint
+    const fullHint = hints[0];
     const tokens   = splitHintTokens(fullHint);
 
-    // Find optimal split point: half the visual width
     const totalLen = visibleLen(fullHint);
     const target   = Math.floor(totalLen / 2);
 
     let accum = 0;
-    let splitAt = Math.ceil(tokens.length / 2); // fallback: half tokens
+    let splitAt = Math.ceil(tokens.length / 2);
     for (let i = 0; i < tokens.length; i++) {
       accum += visibleLen(tokens[i]);
       if (accum >= target) { splitAt = i + 1; break; }
@@ -117,7 +96,6 @@ export function drawNavbar(hints: string[], right?: string): number {
     const line1Tokens = tokens.slice(0, splitAt);
     const line2Tokens = tokens.slice(splitAt);
 
-    // Join tokens back with minimal spacing
     const line1Content = line1Tokens.join("  ");
     const line2Content = line2Tokens.join("  ");
 
@@ -161,6 +139,7 @@ export function enterAlt() {
 }
 
 export function exitAlt() {
+  _navbarRows = 2;
   w("\x1b[?25h\x1b[?1049l\x1b[0m");
 }
 
