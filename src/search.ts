@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 import chalk from "chalk";
-import { w, at, clr, C, R, NAVBAR_ROWS, FOOTER_ROWS, visibleLen, padOrTrim, kb, enterAlt, exitAlt } from "./tui";
+import { w, at, clr, C, R, NAVBAR_ROWS, FOOTER_ROWS, getNR, visibleLen, padOrTrim, kb, enterAlt, exitAlt } from "./tui";
 import { HistoryEntry } from "./historyManager";
 import { getAllAliases } from "./aliases";
 
@@ -236,7 +236,7 @@ export function showSearch(
   const rootDirs = Array.from(new Set([cwd, home])).filter(Boolean);
 
   function vis(): number {
-    return Math.max(1, R() - NAVBAR_ROWS - FOOTER_ROWS - 2);
+    return Math.max(1, R() - getNR() - FOOTER_ROWS - 2);
   }
 
   function adjustScroll() {
@@ -373,7 +373,6 @@ export function showSearch(
     if (searchTimer) clearTimeout(searchTimer);
     process.stdout.removeListener("resize", onResize);
     stdin.removeAllListeners("data");
-    if (stdin.isTTY) stdin.setRawMode(false);
     exitAlt();
   }
 
@@ -415,13 +414,13 @@ export function showSearch(
     }
 
     function drawActionScreen() {
-      const avail = R() - NAVBAR_ROWS;
+      const avail = R() - getNR();
       let out = buildNavbarStr();
       let lineNum = 0;
 
       function line(content: string) {
         if (lineNum >= avail) return;
-        out += at(NAVBAR_ROWS + 1 + lineNum, 1) + clr() + content;
+        out += at(getNR() + 1 + lineNum, 1) + clr() + content;
         lineNum++;
       }
 
@@ -441,7 +440,7 @@ export function showSearch(
         }
       } catch { line(chalk.red("  cannot read directory")); }
 
-      for (let i = lineNum; i < avail - 2; i++) { out += at(NAVBAR_ROWS + 1 + i, 1) + clr(); lineNum++; }
+      for (let i = lineNum; i < avail - 2; i++) { out += at(getNR() + 1 + i, 1) + clr(); lineNum++; }
       out += at(R() - 1, 1) + clr() + chalk.dim("─".repeat(Math.min(cols - 2, 60)));
       out += at(R(), 1) + clr() +
         "  " + chalk.bgBlue.white.bold(" enter ") + " " + chalk.white("cd into  ") +
@@ -495,13 +494,13 @@ export function showSearch(
     function ePerRow(): number { return Math.max(1, Math.floor(C() / EW)); }
 
     function drawFileScreen() {
-      const avail = R() - NAVBAR_ROWS;
+      const avail = R() - getNR();
       let out = buildNavbarStr();
       let lineNum = 0;
 
       function line(content: string) {
         if (lineNum >= avail) return;
-        out += at(NAVBAR_ROWS + 1 + lineNum, 1) + clr() + content;
+        out += at(getNR() + 1 + lineNum, 1) + clr() + content;
         lineNum++;
       }
 
@@ -520,7 +519,7 @@ export function showSearch(
         if (total > avail - 8) line(chalk.gray(`  ... ${total - (avail - 8)} more lines`));
       } catch { line(chalk.gray("  (binary file)")); }
 
-      for (let i = lineNum; i < avail - 4; i++) { out += at(NAVBAR_ROWS + 1 + i, 1) + clr(); lineNum++; }
+      for (let i = lineNum; i < avail - 4; i++) { out += at(getNR() + 1 + i, 1) + clr(); lineNum++; }
 
       out += at(R() - 2, 1) + clr() + chalk.dim("─".repeat(Math.min(cols - 2, 60)));
       out += at(R() - 1, 1) + clr() + chalk.gray("  open with:  ");

@@ -1,5 +1,4 @@
 import readline from "readline";
-import fs from "fs";
 import path from "path";
 import chalk from "chalk";
 import { parseInput } from "./parser";
@@ -16,25 +15,36 @@ import { highlight } from "./highlight";
 import { loadFshrc } from "./fshrc";
 import { printNeofetch, isNeofetchEnabled } from "./neofetch";
 import { showSearch } from "./search";
+import { openFileOpsLogFromMain } from "./fileOpsLog";
+import { loadLog } from "./fileOps";
 
 loadFshrc();
+loadLog();
 
 if (isNeofetchEnabled()) printNeofetch();
 
 let rl: readline.Interface;
 let historyEntries: HistoryEntry[] = loadHistoryEntries();
-let savedHistory: string[]          = entriesToStrings(historyEntries);
-let tabHandlerActive                = false;
-let lastExitCodeForPrompt           = 0;
-let inputPaused                     = false;
+let savedHistory: string[]         = entriesToStrings(historyEntries);
+let tabHandlerActive               = false;
+let lastExitCodeForPrompt          = 0;
+let inputPaused                    = false;
 
-export function isInputPaused(): boolean {
-  return inputPaused;
-}
+// Global SIGINT guard: prevent ^C from printing or exiting during
+// any transition (between interactive UI close and readline recreate).
+// When readline is active it handles SIGINT itself via "SIGINT" event.
+// When paused (interactive UI or transition), we absorb SIGINT silently.
+process.on("SIGINT", () => {
+  // If readline is active, it handles SIGINT via its own listener.
+  // This handler only fires when readline is NOT attached (paused state).
+  if (inputPaused) return; // silently absorb during transitions
+});
+
+export function isInputPaused(): boolean { return inputPaused; }
 
 export function getPrompt(): string {
-  const cwd    = process.cwd();
-  const folder = path.basename(cwd) || "/";
+  const cwd     = process.cwd();
+  const folder  = path.basename(cwd) || "/";
   const gitInfo = getGitInfo();
   const git     = gitInfo ? " " + formatGitPrompt(gitInfo) : "";
   const arrow   = lastExitCodeForPrompt !== 0 ? chalk.red(" > ") : " > ";
@@ -51,45 +61,43 @@ export function pauseInput() {
     savedHistory = (rl as any).history?.slice() ?? [];
     saveHistoryEntries(historyEntries);
     rl.close();
+    (rl as any) = null;
   }
   tabHandlerActive = false;
+  // ensure stdin is in a clean non-raw state so interactive UIs can take over
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  } catch {}
 }
 
 export function resumeInput() {
   inputPaused = false;
-  setTimeout(() => {
-    createRl();
-    prompt();
-  }, 50);
+  // ensure raw mode is off and stdin is ready before readline takes over
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  } catch {}
+  setTimeout(() => { createRl(); prompt(); }, 50);
 }
 
 export function reloadHistoryInRl(updated: HistoryEntry[]) {
   historyEntries = updated;
   savedHistory   = entriesToStrings(updated);
   saveHistoryEntries(updated);
-  if (rl) {
-    (rl as any).history = savedHistory.slice();
-  }
+  if (rl) (rl as any).history = savedHistory.slice();
 }
 
 function stripAnsi(str: string): string {
   return str.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
-function ansiLen(str: string): number {
-  return str.replace(/\x1b\[[0-9;]*[\x40-\x7e]/g, "").length;
-}
-
 function ansiCursorPos(highlighted: string, rawCursor: number): number {
-  let visible = 0;
-  let i       = 0;
+  let visible = 0; let i = 0;
   while (i < highlighted.length && visible < rawCursor) {
     if (highlighted[i] === "\x1b") {
       const end = highlighted.indexOf("m", i);
       if (end !== -1) { i = end + 1; continue; }
     }
-    visible++;
-    i++;
+    visible++; i++;
   }
   return i;
 }
@@ -103,6 +111,18 @@ function setupTabIntercept() {
 
   rlAny._ttyWrite = function (s: string, key: any) {
     if (!key) return original(s, key);
+
+    // Ctrl+H = file ops log
+    if (tabHandlerActive && key.sequence === "\x08") {
+      openLog();
+      return;
+    }
+
+    // Ctrl+R = search
+    if (tabHandlerActive && key.sequence === "\x12") {
+      openSearch();
+      return;
+    }
 
     if (tabHandlerActive && key.name === "tab") {
       const line: string = rlAny.line ?? "";
@@ -136,18 +156,9 @@ function setupTabIntercept() {
       return;
     }
 
-    if (tabHandlerActive && key.name === "tab") return;
-
-    if (tabHandlerActive && key.sequence === "\x12") {
-      openSearch();
-      return;
-    }
-
     original(s, key);
 
-    if (tabHandlerActive) {
-      rlAny._refreshLine?.();
-    }
+    if (tabHandlerActive) rlAny._refreshLine?.();
   };
 
   const origRefresh = rlAny._refreshLine?.bind(rl);
@@ -163,13 +174,17 @@ function setupTabIntercept() {
 
       rlAny.line   = highlighted;
       rlAny.cursor = cursorInHighlight;
-
       origRefresh();
-
       rlAny.line   = rawLine;
       rlAny.cursor = rawCursor;
     };
   }
+}
+
+function openLog() {
+  tabHandlerActive = false;
+  pauseInput();
+  openFileOpsLogFromMain(() => resumeInput());
 }
 
 function openHistory() {
@@ -194,52 +209,51 @@ function openSearch() {
 function openPicker(candidates: string[], line: string, partial: string) {
   tabHandlerActive = false;
   pauseInput();
-
   showPicker(
     candidates,
-    (chosen) => {
-      const newLine = line.slice(0, line.length - partial.length) + chosen;
-      resumeInputWithLine(newLine);
-    },
+    (chosen) => resumeInputWithLine(line.slice(0, line.length - partial.length) + chosen),
     () => resumeInputWithLine(line),
-    () => {
-      resumeInput();
-      setTimeout(() => openHistory(), 60);
-    }
+    () => { resumeInput(); setTimeout(() => openHistory(), 60); }
   );
 }
 
 function resumeInputWithLine(restoreLine: string) {
-  setTimeout(() => {
-    createRl();
-    promptWithLine(restoreLine);
-  }, 50);
+  inputPaused = false;
+  try { if (process.stdin.isTTY) process.stdin.setRawMode(false); } catch {}
+  setTimeout(() => { createRl(); promptWithLine(restoreLine); }, 50);
 }
 
 function createRl() {
+  // close existing rl if somehow still open
   if (rl) {
-    savedHistory = (rl as any).history?.slice() ?? [];
-    saveHistoryEntries(historyEntries);
-    rl.close();
+    try {
+      savedHistory = (rl as any).history?.slice() ?? [];
+      saveHistoryEntries(historyEntries);
+      rl.close();
+    } catch {}
+    (rl as any) = null;
   }
+
+  // ensure stdin is in cooked mode for readline
+  try {
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  } catch {}
 
   process.stdin.setEncoding("utf8");
   process.stdin.resume();
 
   rl = readline.createInterface({
-    input:       process.stdin,
-    output:      process.stdout,
-    terminal:    true,
-    historySize: 500,
+    input: process.stdin, output: process.stdout,
+    terminal: true, historySize: 500,
   });
 
-  if (savedHistory.length > 0) {
-    (rl as any).history = savedHistory.slice();
-  }
+  if (savedHistory.length > 0) (rl as any).history = savedHistory.slice();
 
   rl.on("SIGINT", () => {
+    // clear current line, show fresh prompt
     lastExitCodeForPrompt = 0;
     process.stdout.write("\n");
+    // re-create readline to get a fresh prompt
     createRl();
     prompt();
   });
@@ -248,65 +262,50 @@ function createRl() {
 }
 
 function setLine(newLine: string) {
-  const rlAny    = rl as any;
-  rlAny.line     = newLine;
-  rlAny.cursor   = newLine.length;
+  const rlAny  = rl as any;
+  rlAny.line   = newLine;
+  rlAny.cursor = newLine.length;
   rlAny._refreshLine?.();
 }
 
-export function startPrompt() {
-  createRl();
-  prompt();
-}
+export function startPrompt() { createRl(); prompt(); }
 
 function prompt() {
   tabHandlerActive = true;
   rl.question(getPrompt(), (input) => {
-    tabHandlerActive    = false;
-    const cleanInput    = input.trim();
+    tabHandlerActive = false;
+    const cleanInput = input.trim();
     if (!cleanInput) return prompt();
 
     const rawInput = stripAnsi(cleanInput);
-
     historyEntries = pushEntry(historyEntries, rawInput);
     savedHistory   = entriesToStrings(historyEntries);
     saveHistoryEntries(historyEntries);
 
     const expanded  = expandAliases(rawInput);
     const statement = parseInput(expanded);
-
-    execute(statement, () => {
-      setLastExitCode(getLastExitCode());
-      prompt();
-    });
+    execute(statement, () => { setLastExitCode(getLastExitCode()); prompt(); });
   });
 }
 
 function promptWithLine(prefill: string) {
   tabHandlerActive = true;
   rl.question(getPrompt(), (input) => {
-    tabHandlerActive    = false;
-    const cleanInput    = input.trim();
+    tabHandlerActive = false;
+    const cleanInput = input.trim();
     if (!cleanInput) return prompt();
 
     const rawInput = stripAnsi(cleanInput);
-
     historyEntries = pushEntry(historyEntries, rawInput);
     savedHistory   = entriesToStrings(historyEntries);
     saveHistoryEntries(historyEntries);
 
     const expanded  = expandAliases(rawInput);
     const statement = parseInput(expanded);
-
-    execute(statement, () => {
-      setLastExitCode(getLastExitCode());
-      prompt();
-    });
+    execute(statement, () => { setLastExitCode(getLastExitCode()); prompt(); });
   });
 
-  if (prefill) {
-    setTimeout(() => setLine(prefill), 10);
-  }
+  if (prefill) setTimeout(() => setLine(prefill), 10);
 }
 
 startPrompt();
