@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import chalk from "chalk";
 import { moveToTrash } from "./trash";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, NavRows, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim } from "./tui";
 import { getClipboard, setClipboard, clearClipboard, execCopy, execMove, execRename, uniqueDest, loadLog } from "./fileOps";
 import { showFileOpsLog } from "./fileOpsLog";
 import { showInlineInput } from "./interactiveLs";
@@ -29,31 +29,35 @@ export function interactiveDir(onExit: () => void): void {
   let selIdx = 0; let scrollTop = 0; let selected = new Set<string>();
   let statusMsg = ""; let statusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function NAV(): NavItem[] {
+  function NAV(): NavRows {
     const cb = getClipboard() as any;
     return [
-      { key: "↑↓←→", label: "Move" },
-      { key: "Spc", label: "Select" },
-      { key: "A", label: "Select All" },
-      { key: "Ent", label: "Enter Dir" },
-      { key: "Tab", label: "Parent Dir" },
-      { key: "C", label: "Copy" },
-      { key: "X", label: "Cut" },
-      { key: "V", label: "Paste" },
-      { key: "R", label: "Rename" },
-      { key: "M", label: "Move To" },
-      { key: "D", label: "Delete" },
-      { key: ".", label: showHidden ? "Hide Hidden" : "Show Hidden" },
-      { key: "H", label: "File History" },
-      { key: "Esc", label: cb ? "Cancel Clip" : selected.size > 0 ? "Deselect" : "Quit" },
+      [
+        { key: "↑↓←→", label: "Navigate"   },
+        { key: "Spc",   label: "Select"     },
+        { key: "A",     label: "Select All" },
+        { key: "Ent",   label: "Enter Dir"  },
+        { key: "Tab",   label: "Parent Dir" },
+        { key: "Esc",   label: cb ? "Cancel Clip" : selected.size > 0 ? "Deselect" : "Quit" },
+      ],
+      [
+        { key: "C",  label: "Copy"    },
+        { key: "X",  label: "Cut"     },
+        { key: "V",  label: "Paste"   },
+        { key: "R",  label: "Rename"  },
+        { key: "M",  label: "Move To" },
+        { key: "D",  label: "Delete"  },
+        { key: ".",  label: showHidden ? "Hide Hidden" : "Show Hidden" },
+        { key: "H",  label: "History" },
+      ],
     ];
   }
 
-  function NR(): number { return navbarRows(NAV().length); }
+  const NR = 3;
   function cw(): number { return !entries.length ? 16 : Math.max(...entries.map(e => e.name.length)) + 4; }
   function pr(): number { return Math.max(1, Math.floor(C() / cw())); }
   function tr(): number { return Math.ceil(entries.length / pr()); }
-  function vis(): number { return Math.max(1, R() - NR() - 2); }
+  function vis(): number { return Math.max(1, R() - NR - 2); }
   function adjustScroll(): void { const row = Math.floor(selIdx / pr()); const v = vis(); if (row < scrollTop) scrollTop = row; if (row >= scrollTop + v) scrollTop = row - v + 1; }
 
   function navigate(key: string): boolean {
@@ -93,7 +97,7 @@ export function interactiveDir(onExit: () => void): void {
   }
 
   function drawContent(): void {
-    const nr = NR(); const start = nr + 2; const p = pr(); const cWidth = cw(); const v = vis();
+    const start = NR + 2; const p = pr(); const cWidth = cw(); const v = vis();
     let out = "";
     for (let row = 0; row < v; row++) {
       out += at(start + row, 1) + clr(); const fr = scrollTop + row; let line = " ";
@@ -180,8 +184,9 @@ export function interactiveDir(onExit: () => void): void {
     const targets = getTargets(); if (!targets.length) return; const multi = targets.length > 1;
     const confirmNav: NavItem[] = [{ key: "Y", label: "Move to Trash" }, { key: "N/Esc", label: "Cancel" }];
     function drawConfirm(): void {
-      const nr = navbarRows(confirmNav.length); const start = nr + 2; const avail = R() - nr - 2; const cols = C();
-      drawNavbar(confirmNav); let out = ""; let ln = 0;
+      const start = 3; const avail = R() - 3; const cols = C();
+      drawNavbar(confirmNav, confirmNav.length);
+      let out = ""; let ln = 0;
       function line(s: string) { if (ln >= avail) return; out += at(start + ln, 1) + clr() + s; ln++; }
       if (multi) {
         line(chalk.bold(`  Move ${targets.length} dirs to trash`)); line(chalk.dim("─".repeat(Math.min(cols - 2, 60))));

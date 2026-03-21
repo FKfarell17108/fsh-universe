@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import chalk from "chalk";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim } from "./tui";
 import { deleteCommandEvents, deleteAllCommandEvents } from "./generalHistory";
 
 export const HISTORY_FILE = path.join(process.env.HOME ?? "~", ".fsh_history");
@@ -66,16 +66,23 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (result: His
   }
   let allRows = buildRows(); let cursor = 0; let scrollTop = 0;
 
-  function NAV(): NavItem[] {
+  function ROW1(): NavItem[] {
     return [
-      { key: "↑↓",  label: "Move"       }, { key: "Spc", label: "Select"    },
-      { key: "A",   label: "Select All" }, { key: "Ent", label: "Use Command"},
-      { key: "D",   label: "Delete"     }, { key: "^D",  label: "Delete All" },
+      { key: "↑↓",  label: "Navigate"    },
+      { key: "Spc", label: "Select"       },
+      { key: "A",   label: "Select All"   },
+      { key: "Ent", label: "Use Command"  },
       { key: "Esc", label: selected.size > 0 ? "Deselect" : "Close" },
     ];
   }
-  function NR(): number { return navbarRows(NAV().length); }
-  function vis(): number { return Math.max(1, R() - NR() - 2); }
+  const ROW2: NavItem[] = [
+    { key: "D",  label: "Delete"     },
+    { key: "^D", label: "Delete All" },
+  ];
+  function NAV() { return [ROW1(), ROW2]; }
+  const NR = 3;
+
+  function vis(): number { return Math.max(1, R() - NR - 2); }
   function totalCmds(): number { return buckets.reduce((s, b) => s + b.entries.length, 0); }
   function adjustScroll(): void { const v = vis(); if (cursor < scrollTop) scrollTop = cursor; if (cursor >= scrollTop + v) scrollTop = cursor - v + 1; }
   function toggleSelect(): void {
@@ -90,10 +97,9 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (result: His
     if (selected.size) s += chalk.magenta(`  ${selected.size} sel`); return s;
   }
   function buildRight(): string { if (allRows.length <= vis()) return ""; const more = allRows.length - (scrollTop + vis()); return more > 0 ? `↓ ${more} more` : "end"; }
-  function drawBottom(): void { drawBottomBar(buildLeft(), buildRight()); }
 
   function drawContent(): void {
-    const nr = NR(); const start = nr + 2; const cols = C(); const v = vis(); let out = "";
+    const start = NR + 2; const cols = C(); const v = vis(); let out = "";
     for (let i = 0; i < v; i++) {
       out += at(start + i, 1) + clr(); const row = allRows.slice(scrollTop, scrollTop + v)[i]; if (!row) continue;
       const active = (scrollTop + i) === cursor;
@@ -114,7 +120,8 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (result: His
     }
     w(out);
   }
-  function render(): void { drawNavbar(NAV()); drawContent(); drawBottom(); }
+
+  function render(): void { drawNavbar(NAV()); drawContent(); drawBottomBar(buildLeft(), buildRight()); }
   function fullRedraw(): void { clearScreen(); adjustScroll(); render(); }
   function cleanup(): void { process.stdout.removeListener("resize", onResize); stdin.removeAllListeners("data"); exitAlt(); }
   function exitClosed(): void { cleanup(); const remaining = buckets.flatMap(b => b.entries); setTimeout(() => onDone({ kind: "closed", entries: remaining }), 20); }
@@ -131,10 +138,10 @@ export function showHistoryManager(entries: HistoryEntry[], onDone: (result: His
 
   function showConfirmDeleteAll(): void {
     const total = totalCmds();
-    const confirmNav: NavItem[] = [{ key: "Y", label: `Delete all ${total} command${total === 1 ? "" : "s"} (cannot undo)` }, { key: "N/Esc", label: "Cancel" }];
+    const confirmNav: NavItem[] = [{ key: "Y", label: `Delete all ${total} commands` }, { key: "N/Esc", label: "Cancel" }];
     function drawConfirm(): void {
-      const nr = navbarRows(confirmNav.length); const start = nr + 2; const avail = R() - nr - 2;
-      drawNavbar(confirmNav); let out = ""; let ln = 0;
+      const start = 3; const avail = R() - 3;
+      drawNavbar(confirmNav, confirmNav.length); let out = ""; let ln = 0;
       function line(s: string) { if (ln >= avail) return; out += at(start + ln, 1) + clr() + s; ln++; }
       const shown = buckets.flatMap(b => b.entries).slice(0, avail);
       for (const e of shown) line(chalk.white("    " + (e.cmd.length > C() - 6 ? e.cmd.slice(0, C() - 7) + "…" : e.cmd)));

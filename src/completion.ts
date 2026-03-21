@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import chalk from "chalk";
 import { getAllAliases } from "./aliases";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen } from "./tui";
 
 const BUILTINS = ["exit", "echo", "type", "pwd", "cd", "ls", "dir", "alias", "unalias", "clear", "history", "trash", "fshrc", "neofetch"];
 
@@ -44,15 +44,16 @@ export function showPicker(candidates: string[], onSelect: (chosen: string) => v
   const stdin = process.stdin; let selIdx = 0; let scrollTop = 0;
 
   function NAV(): NavItem[] {
-    const items: NavItem[] = [{ key: "↑↓←→", label: "Move" }, { key: "Ent", label: "Select" }, { key: "Esc", label: "Cancel" }];
+    const items: NavItem[] = [{ key: "↑↓←→", label: "Navigate" }, { key: "Ent", label: "Select" }, { key: "Esc", label: "Cancel" }];
     if (onHistory) items.push({ key: "Tab", label: "History" });
     return items;
   }
-  function NR(): number { return navbarRows(NAV().length); }
+  const NR = 2;
+
   function cw(): number { return Math.max(Math.max(...candidates.map(c => c.length)) + 2, 16); }
   function pr(): number { return Math.max(1, Math.floor(C() / cw())); }
   function tr(): number { return Math.ceil(candidates.length / pr()); }
-  function vis(): number { return Math.max(1, R() - NR() - 2); }
+  function vis(): number { return Math.max(1, R() - NR - 2); }
   function adjustScroll(): void { const row = Math.floor(selIdx / pr()); const v = vis(); if (row < scrollTop) scrollTop = row; if (row >= scrollTop + v) scrollTop = row - v + 1; }
 
   function buildLeft(): string {
@@ -63,7 +64,7 @@ export function showPicker(candidates: string[], onSelect: (chosen: string) => v
   function buildRight(): string { if (tr() <= vis()) return ""; const more = tr() - (scrollTop + vis()); return more > 0 ? `↓ ${more} more` : "end"; }
 
   function drawContent(): void {
-    const nr = NR(); const start = nr + 2; const p = pr(); const c = cw(); const v = vis(); let out = "";
+    const start = NR + 2; const p = pr(); const c = cw(); const v = vis(); let out = "";
     for (let row = 0; row < v; row++) {
       out += at(start + row, 1) + clr(); const fr = scrollTop + row; let line = " ";
       for (let col = 0; col < p; col++) {
@@ -77,7 +78,7 @@ export function showPicker(candidates: string[], onSelect: (chosen: string) => v
     }
     w(out);
   }
-  function render(): void { drawNavbar(NAV()); drawContent(); drawBottomBar(buildLeft(), buildRight()); }
+  function render(): void { drawNavbar(NAV(), NAV().length); drawContent(); drawBottomBar(buildLeft(), buildRight()); }
   function fullRedraw(): void { clearScreen(); adjustScroll(); render(); }
   function cleanup(): void { process.stdout.removeListener("resize", onResize); stdin.removeAllListeners("data"); exitAlt(); }
   function exit(chosen?: string): void { cleanup(); setTimeout(() => { if (chosen !== undefined) onSelect(chosen); else onCancel(); }, 20); }

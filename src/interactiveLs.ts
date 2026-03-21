@@ -5,7 +5,7 @@ import { execFileSync } from "child_process";
 import { moveToTrash } from "./trash";
 import { getClipboard, setClipboard, clearClipboard, execCopy, execMove, execRename, uniqueDest, loadLog } from "./fileOps";
 import { showFileOpsLog } from "./fileOpsLog";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, NavRows, nrFromRows, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim } from "./tui";
 
 const EDITOR_CANDIDATES = ["nvim", "vim", "vi", "nano", "emacs", "micro", "hx", "helix", "code", "gedit"];
 
@@ -85,31 +85,35 @@ function runBrowser(startDir: string, stdin: NodeJS.ReadStream, onQuit: () => vo
     adjustScroll();
   }
 
-  function NAV(): NavItem[] {
+  function NAV(): NavRows {
     const cb = getClipboard() as any;
     return [
-      { key: "↑↓←→", label: "Move"        },
-      { key: "Spc",   label: "Select"      },
-      { key: "A",     label: "Select All"  },
-      { key: "Ent",   label: "Open/Enter"  },
-      { key: "Tab",   label: "Parent Dir"  },
-      { key: "C",     label: "Copy"        },
-      { key: "X",     label: "Cut"         },
-      { key: "V",     label: "Paste"       },
-      { key: "R",     label: "Rename"      },
-      { key: "M",     label: "Move To"     },
-      { key: "D",     label: "Delete"      },
-      { key: ".",     label: showHidden ? "Hide Hidden" : "Show Hidden" },
-      { key: "H",     label: "File History"},
-      { key: "Esc",   label: cb ? "Cancel Clip" : selected.size > 0 ? "Deselect" : "Quit" },
+      [
+        { key: "↑↓←→", label: "Navigate"   },
+        { key: "Spc",   label: "Select"     },
+        { key: "A",     label: "Select All" },
+        { key: "Ent",   label: "Open/Enter" },
+        { key: "Tab",   label: "Parent Dir" },
+        { key: "Esc",   label: cb ? "Cancel Clip" : selected.size > 0 ? "Deselect" : "Quit" },
+      ],
+      [
+        { key: "C",  label: "Copy"    },
+        { key: "X",  label: "Cut"     },
+        { key: "V",  label: "Paste"   },
+        { key: "R",  label: "Rename"  },
+        { key: "M",  label: "Move To" },
+        { key: "D",  label: "Delete"  },
+        { key: ".",  label: showHidden ? "Hide Hidden" : "Show Hidden" },
+        { key: "H",  label: "History" },
+      ],
     ];
   }
 
-  function NR(): number { return navbarRows(NAV().length); }
+  const NR = 3;
   function cw(): number { return !entries.length ? 16 : Math.max(...entries.map(e => e.name.length)) + 4; }
   function pr(): number { return Math.max(1, Math.floor(C() / cw())); }
   function tr(): number { return Math.ceil(entries.length / pr()); }
-  function vis(): number { return Math.max(1, R() - NR() - 2); }
+  function vis(): number { return Math.max(1, R() - NR - 2); }
 
   function adjustScroll(): void {
     const row = Math.floor(selIdx / pr()); const v = vis();
@@ -171,7 +175,7 @@ function runBrowser(startDir: string, stdin: NodeJS.ReadStream, onQuit: () => vo
   }
 
   function drawContent(): void {
-    const nr = NR(); const start = nr + 2; const p = pr(); const cWidth = cw(); const v = vis();
+    const start = NR + 2; const p = pr(); const cWidth = cw(); const v = vis();
     let out = "";
     for (let row = 0; row < v; row++) {
       out += at(start + row, 1) + clr();
@@ -266,8 +270,8 @@ function runBrowser(startDir: string, stdin: NodeJS.ReadStream, onQuit: () => vo
     const targets = getTargets(); if (!targets.length) return; const multi = targets.length > 1;
     const confirmNav: NavItem[] = [{ key: "Y", label: "Move to Trash" }, { key: "N/Esc", label: "Cancel" }];
     function drawConfirm(): void {
-      const nr = navbarRows(confirmNav.length); const start = nr + 2; const avail = R() - nr - 2; const cols = C();
-      drawNavbar(confirmNav);
+      const start = 3; const avail = R() - 3; const cols = C();
+      drawNavbar(confirmNav, confirmNav.length);
       let out = ""; let ln = 0;
       function line(s: string) { if (ln >= avail) return; out += at(start + ln, 1) + clr() + s; ln++; }
       if (multi) {
@@ -306,11 +310,10 @@ function runBrowser(startDir: string, stdin: NodeJS.ReadStream, onQuit: () => vo
     const EW = Math.max(...editors.map(e => e.length)) + 2; let eSel = 0;
     const editorNav: NavItem[] = [{ key: "↑↓←→", label: "Move" }, { key: "Ent", label: "Open" }, { key: "Esc", label: "Back" }];
     function drawEditor(): void {
-      const p = Math.max(1, Math.floor(C() / EW)); const nr = navbarRows(editorNav.length); const start = nr + 2;
-      drawNavbar(editorNav);
-      let out = at(start, 1) + clr() + " " + chalk.dim("choose editor:");
+      drawNavbar(editorNav, editorNav.length);
+      let out = at(3, 1) + clr() + " " + chalk.dim("choose editor:");
       let line = " "; for (let i = 0; i < editors.length; i++) { const name = editors[i].padEnd(EW, " "); line += i === eSel ? chalk.bgWhite.black.bold(name) : chalk.cyan(name); }
-      out += at(start + 1, 1) + clr() + line; w(out);
+      out += at(4, 1) + clr() + line; w(out);
       drawBottomBar(path.basename(filePath), "");
     }
     const onER = () => { clearScreen(); drawEditor(); };

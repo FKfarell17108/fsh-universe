@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execFileSync } from "child_process";
 import chalk from "chalk";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim } from "./tui";
 import { HistoryEntry } from "./historyManager";
 import { getAllAliases } from "./aliases";
 
@@ -67,8 +67,13 @@ export function showSearch(historyEntries: HistoryEntry[], onSelect: (value: str
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
   const home = process.env.HOME ?? ""; const cwd = process.cwd(); const rootDirs = Array.from(new Set([cwd, home])).filter(Boolean);
 
-  const NAV: NavItem[] = [{ key: "↑↓", label: "Move" }, { key: "Ent", label: "Select" }, { key: "Esc", label: "Cancel" }];
-  function NR(): number { return navbarRows(NAV.length); }
+  const NAV: NavItem[] = [
+    { key: "↑↓",  label: "Navigate" },
+    { key: "Ent",  label: "Select"   },
+    { key: "Esc",  label: "Cancel"   },
+  ];
+
+  function NR(): number { return 2; }
   function searchBarRow(): number { return NR() + 1; }
   function vis(): number { return Math.max(1, R() - NR() - 3); }
   function contentStart(): number { return NR() + 2; }
@@ -123,7 +128,12 @@ export function showSearch(historyEntries: HistoryEntry[], onSelect: (value: str
     w(out);
   }
 
-  function render(): void { drawNavbar(NAV); drawSearchBar(); drawResults(); drawBottomBar(buildLeft(), buildRight()); }
+  function render(): void {
+    drawNavbar(NAV, NAV.length);
+    drawSearchBar();
+    drawResults();
+    drawBottomBar(buildLeft(), buildRight());
+  }
   function fullRedraw(): void { clearScreen(); runSearch(); render(); }
   function cleanup(): void { if (searchTimer) clearTimeout(searchTimer); process.stdout.removeListener("resize", onResize); stdin.removeAllListeners("data"); exitAlt(); }
   function scheduleSearch(): void { if (searchTimer) clearTimeout(searchTimer); searchTimer = setTimeout(() => { runSearch(); render(); }, query.length < 2 ? 0 : 120); }
@@ -138,8 +148,8 @@ export function showSearch(historyEntries: HistoryEntry[], onSelect: (value: str
     const full = result.fullPath;
     const actionNav: NavItem[] = [{ key: "Ent/C", label: "cd into" }, { key: "Esc", label: "Back" }];
     function drawAction(): void {
-      const nr = navbarRows(actionNav.length); const start = nr + 2; const avail = R() - nr - 2;
-      drawNavbar(actionNav); let out = ""; let ln = 0;
+      const nr = 3; const start = nr + 2; const avail = R() - nr - 2;
+      drawNavbar(actionNav, actionNav.length); let out = ""; let ln = 0;
       function line(content: string) { if (ln >= avail) return; out += at(start + ln, 1) + clr() + content; ln++; }
       line(chalk.blue.bold("▸ " + result.display) + "  " + chalk.dim(result.sub)); line(chalk.dim("─".repeat(Math.min(C() - 2, 60))));
       try { const children = fs.readdirSync(full, { withFileTypes: true }).slice(0, avail - 3); if (!children.length) { line(chalk.gray("  (empty directory)")); } else { for (const c of children) line((c.isDirectory() ? chalk.blue("  ▸ ") : chalk.gray("    ")) + chalk.white(c.name)); const total = fs.readdirSync(full).length; if (total > avail - 3) line(chalk.gray(`  ... and ${total - (avail - 3)} more`)); } } catch { line(chalk.red("  cannot read directory")); }
@@ -161,8 +171,8 @@ export function showSearch(historyEntries: HistoryEntry[], onSelect: (value: str
     const EW = Math.max(...editors.map(e => e.length)) + 2; let eSelIdx = 0;
     const fileNav: NavItem[] = [{ key: "Ent", label: "Open" }, { key: "←→", label: "Editor" }, { key: "Esc", label: "Back" }];
     function drawFileAction(): void {
-      const nr = navbarRows(fileNav.length); const start = nr + 2; const avail = R() - nr - 3;
-      drawNavbar(fileNav); let out = ""; let ln = 0;
+      const nr = 3; const start = nr + 2; const avail = R() - nr - 3;
+      drawNavbar(fileNav, fileNav.length); let out = ""; let ln = 0;
       function line(content: string) { if (ln >= avail) return; out += at(start + ln, 1) + clr() + content; ln++; }
       const hidden = result.display.startsWith(".");
       line((hidden ? chalk.gray : chalk.white)("  " + result.display) + "  " + chalk.dim(result.sub)); line(chalk.dim("─".repeat(Math.min(C() - 2, 60))));

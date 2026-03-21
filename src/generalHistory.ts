@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import chalk from "chalk";
-import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim, navbarRows } from "./tui";
+import { w, at, clr, C, R, drawNavbar, NavItem, drawBottomBar, enterAlt, exitAlt, clearScreen, visibleLen, padOrTrim } from "./tui";
 
 export type GeneralEventKind = "command" | "copy" | "move" | "rename" | "trash" | "restore" | "delete" | "empty_trash";
 export type GeneralEvent = { id: string; kind: GeneralEventKind; label: string; detail: string; ts: number; };
@@ -106,15 +106,24 @@ export function showGeneralHistory(onBack: () => void): void {
   const expanded: Record<Category, boolean> = { commands: false, file_mutations: false, trash_ops: false };
   let rows = buildRows(events, expanded); let sel = 0; let scrollTop = 0;
 
-  const NAV: NavItem[] = [{ key: "↑↓", label: "Navigate" }, { key: "Ent", label: "Expand/Detail" }, { key: "Esc", label: "Back" }];
-  function NR(): number { return navbarRows(NAV.length); }
+  const NAV: NavItem[] = [
+    { key: "↑↓", label: "Navigate"      },
+    { key: "Ent", label: "Expand/Detail" },
+    { key: "Esc", label: "Back"          },
+  ];
+
+  function NR(): number { return 2; }
   function vis(): number { return Math.max(1, R() - NR() - 2); }
   function start(): number { return NR() + 2; }
   function adjustScroll(): void { const v = vis(); if (sel < scrollTop) scrollTop = sel; if (sel >= scrollTop + v) scrollTop = sel - v + 1; }
   function rebuild(): void { rows = buildRows(events, expanded); sel = Math.min(sel, Math.max(0, rows.length - 1)); adjustScroll(); }
   function buildLeft(): string { return `Activity  ${events.length} event${events.length === 1 ? "" : "s"}`; }
   function buildRight(): string { if (rows.length <= vis()) return ""; const more = rows.length - (scrollTop + vis()); return more > 0 ? `↓ ${more} more` : "end"; }
-  function fullDraw(): void { drawNavbar(NAV); drawContentRows(rows, sel, scrollTop, vis(), start()); drawBottomBar(buildLeft(), buildRight()); }
+  function fullDraw(): void {
+    drawNavbar(NAV, NAV.length);
+    drawContentRows(rows, sel, scrollTop, vis(), start());
+    drawBottomBar(buildLeft(), buildRight());
+  }
   function onResize(): void { clearScreen(); adjustScroll(); fullDraw(); }
   function cleanup(): void { process.stdout.removeListener("resize", onResize); stdin.removeAllListeners("data"); clearScreen(); exitAlt(); }
   function exit(): void { cleanup(); setTimeout(onBack, 20); }
@@ -122,8 +131,23 @@ export function showGeneralHistory(onBack: () => void): void {
   function openCommandEdit(): void {
     const cmdEvents = events.filter(e => e.kind === "command"); if (!cmdEvents.length) return;
     let cmdSel = 0; let cmdScroll = 0; let cmdSelected = new Set<string>();
-    const cmdNAV: NavItem[] = [{ key: "↑↓", label: "Navigate" }, { key: "Spc", label: "Select" }, { key: "A", label: "Select All" }, { key: "D", label: "Delete" }, { key: "^D", label: "Delete All" }, { key: "Esc", label: cmdSelected.size > 0 ? "Deselect" : "Back" }];
-    function cmdNR(): number { return navbarRows(cmdNAV.length); }
+
+    function CMD_NAV_ROW1(): NavItem[] {
+      return [
+        { key: "↑↓",  label: "Navigate"   },
+        { key: "Spc", label: "Select"      },
+        { key: "A",   label: "Select All"  },
+        { key: "Esc", label: cmdSelected.size > 0 ? "Deselect" : "Back" },
+      ];
+    }
+    function CMD_NAV_ROW2(): NavItem[] {
+      return [
+        { key: "D",  label: "Delete"     },
+        { key: "^D", label: "Delete All" },
+      ];
+    }
+
+    function cmdNR(): number { return 2; }
     function cmdVis(): number { return Math.max(1, R() - cmdNR() - 2); }
     function cmdStart(): number { return cmdNR() + 2; }
     function cmdAdjust(): void { const v = cmdVis(); if (cmdSel < cmdScroll) cmdScroll = cmdSel; if (cmdSel >= cmdScroll + v) cmdScroll = cmdSel - v + 1; }
@@ -131,7 +155,8 @@ export function showGeneralHistory(onBack: () => void): void {
 
     function drawCmd(): void {
       const v = cmdVis(); const s = cmdStart(); const cols = C();
-      drawNavbar(cmdNAV); let out = "";
+      drawNavbar([...CMD_NAV_ROW1(), ...CMD_NAV_ROW2()], CMD_NAV_ROW1().length);
+      let out = "";
       for (let i = 0; i < v; i++) {
         out += at(s + i, 1) + clr(); const e = cmdEvents[cmdScroll + i]; if (!e) continue;
         const active = (cmdScroll + i) === cmdSel; const isSel = cmdSelected.has(e.id); const ts = fmtTime(e.ts);
@@ -177,16 +202,16 @@ export function showGeneralHistory(onBack: () => void): void {
 
   function showDetail(e: GeneralEvent): void {
     const detailNAV: NavItem[] = [{ key: "Esc", label: "Back" }];
-    const dNR = navbarRows(detailNAV.length); const dStart = dNR + 2; const dVis = () => R() - dNR - 2;
+    const dNR = 3; const dStart = dNR + 2; const dVis = () => R() - dNR - 2;
     process.stdout.removeListener("resize", onResize);
-    const onDR = () => { clearScreen(); drawNavbar(detailNAV); drawDetailContent(e, dStart, dVis()); drawBottomBar(e.label.slice(0, 40), ""); };
+    const onDR = () => { clearScreen(); drawNavbar(detailNAV, detailNAV.length); drawDetailContent(e, dStart, dVis()); drawBottomBar(e.label.slice(0, 40), ""); };
     process.stdout.on("resize", onDR);
     function onDetailKey(k: string): void {
       if (k === "\u0003") { stdin.removeListener("data", onDetailKey); process.stdout.removeListener("resize", onDR); cleanup(); setTimeout(onBack, 20); return; }
       if (k === "\u001b" || k === "q") { stdin.removeListener("data", onDetailKey); process.stdout.removeListener("resize", onDR); process.stdout.on("resize", onResize); clearScreen(); fullDraw(); stdin.on("data", onKey); }
     }
     stdin.removeListener("data", onKey); stdin.on("data", onDetailKey);
-    clearScreen(); drawNavbar(detailNAV); drawDetailContent(e, dStart, dVis()); drawBottomBar(e.label.slice(0, 40), "");
+    clearScreen(); drawNavbar(detailNAV, detailNAV.length); drawDetailContent(e, dStart, dVis()); drawBottomBar(e.label.slice(0, 40), "");
   }
 
   function onKey(raw: string): void {
